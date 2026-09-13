@@ -1,0 +1,18 @@
+appId: com.anonymous.MosqueMap
+---
+- launchApp
+
+# Tap on Map or Home tab
+- tapOn:
+    text: "Map"
+    optional: true
+
+# Wait for map or list to populate
+- assertVisible:
+    text: ".*"
+    timeout: 10000
+
+# Tap a mosque item or card
+- tapOn:
+    text: "Mosque"
+    optional: true

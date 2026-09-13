@@ -1,0 +1,20 @@
+appId: com.anonymous.MosqueMap
+---
+- launchApp
+
+# Navigate to Settings tab
+- tapOn: "Settings"
+
+# Verify Prayer Times Calculation section
+- assertVisible: "Prayer Times Calculation"
+- assertVisible: "Method"
+
+# Open calculation method selector
+- tapOn: "Method"
+- assertVisible: "Muslim Atlas (Default)"
+
+# Select Muslim Atlas (Default)
+- tapOn: "Muslim Atlas (Default)"
+
+# Verify selection persisted in UI
+- assertVisible: "Muslim Atlas"

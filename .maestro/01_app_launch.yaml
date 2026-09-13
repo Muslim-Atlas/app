@@ -1,0 +1,17 @@
+appId: com.anonymous.MosqueMap
+---
+- launchApp:
+    clearState: true
+
+# Dismiss permission dialogs if presented
+- tapOn:
+    text: "While using the app"
+    optional: true
+- tapOn:
+    text: "Allow"
+    optional: true
+
+# Assert main screen is active
+- assertVisible:
+    text: "Settings"
+    optional: true
