@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "ios-design-agent-skill": {
+      "source": "vermont42/iOS-Design-Agent-Skill",
+      "sourceType": "github",
+      "skillPath": "ios-design-agent-skill/SKILL.md",
+      "computedHash": "358f1ec6c9e94959fcb2ca2117d8a0a0e5131c5505defece29e1f442b1f1c475"
+    }
+  }
+}

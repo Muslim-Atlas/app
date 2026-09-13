@@ -52,6 +52,7 @@ ios/Pods/
 # IDEs and editors
 .vscode/
 .idea/
+.codex/
 *.suo
 *.ntvs*
 *.njsproj
