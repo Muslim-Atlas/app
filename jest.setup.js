@@ -12,6 +12,35 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 
+// Mock Firebase
+jest.mock('firebase/app', () => ({
+  initializeApp: jest.fn(() => ({})),
+}));
+jest.mock('firebase/auth', () => ({
+  initializeAuth: jest.fn(() => ({})),
+  getReactNativePersistence: jest.fn(),
+  getAuth: jest.fn(() => ({})),
+  onAuthStateChanged: jest.fn((auth, cb) => {
+    cb({ isAnonymous: false, uid: 'test-user-id', email: 'user@muslimatlas.com' });
+    return jest.fn();
+  }),
+  signInAnonymously: jest.fn(async () => ({ user: { isAnonymous: true } })),
+  signOut: jest.fn(async () => {}),
+  signInWithEmailAndPassword: jest.fn(),
+  createUserWithEmailAndPassword: jest.fn(),
+  EmailAuthProvider: { credential: jest.fn() },
+  linkWithCredential: jest.fn(),
+}));
+jest.mock('firebase/firestore', () => ({
+  getFirestore: jest.fn(() => ({})),
+  doc: jest.fn(),
+  getDoc: jest.fn(async () => ({ exists: () => false, data: () => ({}) })),
+  setDoc: jest.fn(async () => {}),
+  updateDoc: jest.fn(async () => {}),
+  arrayUnion: jest.fn(),
+  serverTimestamp: jest.fn(),
+}));
+
 // Mock expo-font
 jest.mock('expo-font', () => ({
   loadAsync: jest.fn(() => Promise.resolve()),
