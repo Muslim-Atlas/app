@@ -19,6 +19,7 @@ import { usePrayerSettings } from '../context/PrayerSettingsContext';
 
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
 const SEARCH_RADIUS_METERS = 5000;
+const MAX_RADIUS_METERS = 10000;
 // Show "Search this area" button after moving more than 3km from last fetch
 const SEARCH_BUTTON_THRESHOLD_METERS = 3000;
 
@@ -87,7 +88,7 @@ export default function MapScreen({ route, navigation }) {
 
   // ── Global Context ──
   const { 
-    userLocation: location, mosques, halalFood, isLoading: loading, error, 
+    userLocation: location, mosques, halalFood, isLoading: loading, isPlacesLoading, error, 
     searchArea, loadMoreMosques, fetchCount,
     searchOrigin, setSearchOrigin, searchLocationName, setSearchLocationName,
     fetchSingleMosque, geocodePlace,
@@ -95,6 +96,7 @@ export default function MapScreen({ route, navigation }) {
   } = React.useContext(MosqueContext);
 
   const { theme } = useTheme();
+  const { asrMethod, prayerOffsets, calculationMethod, highLatitudeRule } = usePrayerSettings();
 
   const [searchModalVisible, setSearchModalVisible] = useState(false);
 
@@ -132,6 +134,77 @@ export default function MapScreen({ route, navigation }) {
   const [followUser, setFollowUser] = useState(true);
   const [listStartLocation, setListStartLocation] = useState(null);
   const [isStartLocationSearch, setIsStartLocationSearch] = useState(false);
+
+  // ── Search Area State ──
+  const [showSearchButton, setShowSearchButton] = useState(false);
+  const [searching, setSearching] = useState(false);
+
+  // ── Prayer Logic State ──
+  const [prayerTimes, setPrayerTimes] = useState(null);
+  const [nextPrayer, setNextPrayer] = useState(null);
+  const [mosquePrayerTimes, setMosquePrayerTimes] = useState(null);
+  const [mosqueNextPrayer, setMosqueNextPrayer] = useState(null);
+  const [mosquePrayerLoading, setMosquePrayerLoading] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // ── Refs ──
+  const bottomSheetRef = useRef(null);
+  const cameraRef = useRef(null);
+  const mapRef = useRef(null);
+  const currentMapCenter = useRef(null);
+  const lastFetchedLocation = useRef(null);
+  const hasInitialCameraSettledRef = useRef(false);
+  const isPreviewingRef = useRef(false);
+  const isNavigatingRef = useRef(false);
+  const savedCamera = useRef(null);
+  const liveCameraState = useRef(null);
+  const lastAutoFetchedCoords = useRef(null);
+  const isAutoFetchingRef = useRef(false);
+
+  useEffect(() => { isPreviewingRef.current = isPreviewingRoute; }, [isPreviewingRoute]);
+  useEffect(() => { isNavigatingRef.current = isNavigating; }, [isNavigating]);
+
+  // ── Sorted Mosques / Halal Food & displayData (Hoisted before useMemo / effects) ──
+  const sortedMosques = useMemo(() => {
+    if (!listStartLocation) return mosques || [];
+    return [...(mosques || [])].map(m => {
+      const pLat = m.location?.latitude || m.geometry?.location?.lat;
+      const pLng = m.location?.longitude || m.geometry?.location?.lng;
+      if (!pLat || !pLng) return m;
+      const distMeters = haversineDistance(
+        listStartLocation.coords.latitude,
+        listStartLocation.coords.longitude,
+        pLat, pLng
+      );
+      return { ...m, distMeters };
+    }).sort((a, b) => a.distMeters - b.distMeters);
+  }, [mosques, listStartLocation]);
+
+  const sortedFood = useMemo(() => {
+    if (!listStartLocation) return halalFood || [];
+    return [...(halalFood || [])].map(f => {
+      const pLat = f.location?.latitude || f.geometry?.location?.lat;
+      const pLng = f.location?.longitude || f.geometry?.location?.lng;
+      if (!pLat || !pLng) return f;
+      const distMeters = haversineDistance(
+        listStartLocation.coords.latitude,
+        listStartLocation.coords.longitude,
+        pLat, pLng
+      );
+      return { ...f, distMeters };
+    }).sort((a, b) => a.distMeters - b.distMeters);
+  }, [halalFood, listStartLocation]);
+
+  const displayData = activeCategory === 'mosque' ? sortedMosques : sortedFood;
+
+  const mapStyleUrl = theme.mode === 'dark' 
+    ? Mapbox.StyleURL.Dark 
+    : Mapbox.StyleURL.Street;
 
   // ── Search Handlers ──
   const handleSelectLocation = async ({ placeId, text, isMosque }) => {
@@ -181,24 +254,20 @@ export default function MapScreen({ route, navigation }) {
         }, 400); // Allow modal to fully close before panning natively
 
         lastFetchedLocation.current = { lat: loc.latitude, lng: loc.longitude };
-        await searchArea(loc.latitude, loc.longitude, MAX_RADIUS_METERS, newOrigin, 10, true);
+        if (activeCategory === 'food') {
+          await searchHalalFood(loc.latitude, loc.longitude, newOrigin, 20, true);
+        } else {
+          await searchArea(loc.latitude, loc.longitude, MAX_RADIUS_METERS, newOrigin, 10, true);
+        }
       }
     }
   };
-
-  // ── Search Area State ──
-  const [showSearchButton, setShowSearchButton] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const currentMapCenter = useRef(null);
-  const lastFetchedLocation = useRef(null);
-  const hasInitialCameraSettledRef = useRef(false);
-
 
   // Update camera whenever location changes, as long as the user hasn't manually panned away.
   // Using followUser as the gate instead of a one-shot ref, so a corrected GPS fix
   // (e.g. emulator mock location arriving after a stale last-known) still moves the camera.
   useEffect(() => {
-    if (!location || !followUser) return;
+    if (!location || !followUser || isPreviewingRoute) return;
     const isFirst = !hasInitialCameraSettledRef.current;
     if (isFirst) {
       // First fix — mark settled and record fetch origin
@@ -210,42 +279,7 @@ export default function MapScreen({ route, navigation }) {
       zoomLevel: 13,
       animationDuration: isFirst ? 1500 : 800,
     });
-  }, [location, followUser]);
-
-
-
-  // Prayer Logic
-  const [prayerTimes, setPrayerTimes] = useState(null);
-  const [nextPrayer, setNextPrayer] = useState(null);
-
-  // Mosque-specific prayer state
-  const [mosquePrayerTimes, setMosquePrayerTimes] = useState(null);
-  const [mosqueNextPrayer, setMosqueNextPrayer] = useState(null);
-  const [mosquePrayerLoading, setMosquePrayerLoading] = useState(false);
-
-  // Route preview state
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const bottomSheetRef = useRef(null);
-  const cameraRef = useRef(null);
-  
-  const mapStyleUrl = theme.mode === 'dark' 
-    ? Mapbox.StyleURL.Dark 
-    : Mapbox.StyleURL.Street;
-  const mapRef = useRef(null);
-  const isPreviewingRef = useRef(false);
-  const isNavigatingRef = useRef(false);
-  useEffect(() => { isPreviewingRef.current = isPreviewingRoute; }, [isPreviewingRoute]);
-  useEffect(() => { isNavigatingRef.current = isNavigating; }, [isNavigating]);
-
-  // Camera state tracking
-  const savedCamera = useRef(null);
-  const liveCameraState = useRef(null);
+  }, [location, followUser, isPreviewingRoute]);
 
   // ── GeoJSON Feature Collection ─────────────────────────────────────────────
   // Store lng, lat AND name in properties so onPress can work without a re-lookup
@@ -290,7 +324,10 @@ export default function MapScreen({ route, navigation }) {
     const oLat = customOrigin?.latitude ?? location?.coords?.latitude;
     const oLng = customOrigin?.longitude ?? location?.coords?.longitude;
     if (!oLat || !oLng) return null;
-    return haversineDistance(oLat, oLng, selectedMosque.location.latitude, selectedMosque.location.longitude);
+    const mLat = selectedMosque.location?.latitude ?? selectedMosque.geometry?.location?.lat;
+    const mLng = selectedMosque.location?.longitude ?? selectedMosque.geometry?.location?.lng;
+    if (typeof mLat !== 'number' || typeof mLng !== 'number') return null;
+    return haversineDistance(oLat, oLng, mLat, mLng);
   }, [selectedMosque, location, customOrigin]);
 
   const estimatedTimes = useMemo(() => {
@@ -314,7 +351,7 @@ export default function MapScreen({ route, navigation }) {
     if (!location) return;
     (async () => {
       try {
-        const res = await fetch(`http://api.aladhan.com/v1/timings?latitude=${location.coords.latitude}&longitude=${location.coords.longitude}&method=2`);
+        const res = await fetch(`https://api.aladhan.com/v1/timings?latitude=${location.coords.latitude}&longitude=${location.coords.longitude}&method=2`);
         const data = await res.json();
         if (data?.data?.timings) {
           setPrayerTimes(data.data.timings);
@@ -331,9 +368,11 @@ export default function MapScreen({ route, navigation }) {
     const currentMs = currentTime.getHours() * 60 + currentTime.getMinutes();
 
     const getMs = (timeString) => {
+        if (!timeString || typeof timeString !== 'string') return 0;
         const timeStr = timeString.split(' ')[0];
+        if (!timeStr || !timeStr.includes(':')) return 0;
         const [h, m] = timeStr.split(':').map(Number);
-        return h * 60 + m;
+        return (isNaN(h) || isNaN(m)) ? 0 : h * 60 + m;
     };
 
     const fajrMs = getMs(prayerTimes.Fajr);
@@ -365,36 +404,64 @@ export default function MapScreen({ route, navigation }) {
   }, [currentTime, prayerTimes]);
 
   // ── Mosque-Specific Prayer Times Calculation (Local) ──────────────────────
-  const { asrMethod, prayerOffsets, calculationMethod, highLatitudeRule } = usePrayerSettings();
-
   useEffect(() => {
     if (!selectedMosque) {
       setMosquePrayerTimes(null);
       return;
     }
+    const mLat = selectedMosque.location?.latitude ?? selectedMosque.geometry?.location?.lat;
+    const mLng = selectedMosque.location?.longitude ?? selectedMosque.geometry?.location?.lng;
+    if (typeof mLat !== 'number' || typeof mLng !== 'number') {
+      setMosquePrayerTimes(null);
+      return;
+    }
     const times = calculatePrayerTimes(
-      selectedMosque.location.latitude,
-      selectedMosque.location.longitude,
+      mLat,
+      mLng,
       currentTime,
       { asrMethod, prayerOffsets, calculationMethod, highLatitudeRule }
     );
     setMosquePrayerTimes(times);
   }, [selectedMosque?.id, asrMethod, prayerOffsets, calculationMethod, highLatitudeRule, currentTime.getDate()]);
 
-  // Auto-fetch mosques and halal food when location becomes ready
   useEffect(() => {
     if (!location) return;
-    const lat = searchOrigin?.coords?.latitude ?? location.coords.latitude;
-    const lng = searchOrigin?.coords?.longitude ?? location.coords.longitude;
     const origin = searchOrigin ?? location;
+    const lat = origin.coords?.latitude;
+    const lng = origin.coords?.longitude;
+    if (typeof lat !== 'number' || typeof lng !== 'number') return;
 
-    if (mosques.length === 0 && !loading) {
-      searchArea(lat, lng, SEARCH_RADIUS_METERS, origin, 10, false);
+    // If we already have mosques/food loaded from cache for this location, mark as fetched
+    if (lastAutoFetchedCoords.current === null && mosques.length > 0 && halalFood.length > 0 && !searchOrigin) {
+      lastAutoFetchedCoords.current = { lat, lng };
+      return;
     }
-    if (halalFood.length === 0 && !loading) {
-      searchHalalFood(lat, lng, origin, 10, false);
+
+    // If switching to food and no food is loaded yet, fetch it on-demand
+    if (activeCategory === 'food' && halalFood.length === 0 && !isAutoFetchingRef.current) {
+      isAutoFetchingRef.current = true;
+      searchHalalFood(lat, lng, origin, 20, false).finally(() => {
+        isAutoFetchingRef.current = false;
+      });
+      return;
     }
-  }, [location, searchOrigin, mosques.length, halalFood.length, searchArea, searchHalalFood]);
+
+    const prev = lastAutoFetchedCoords.current;
+    const dist = prev ? haversineDistance(prev.lat, prev.lng, lat, lng) : Infinity;
+
+    // Only fetch if coordinates have never been fetched or origin moved > 2000m
+    if (dist > 2000 && !isAutoFetchingRef.current) {
+      lastAutoFetchedCoords.current = { lat, lng };
+      isAutoFetchingRef.current = true;
+
+      Promise.all([
+        searchArea(lat, lng, 10000, origin, 10, false),
+        searchHalalFood(lat, lng, origin, 20, false),
+      ]).finally(() => {
+        isAutoFetchingRef.current = false;
+      });
+    }
+  }, [location, searchOrigin, mosques.length, halalFood.length, activeCategory, searchArea, searchHalalFood]);
 
   // Dynamic density-based zoom: zoom in closer if pins are clustered near the center
   useEffect(() => {
@@ -410,20 +477,20 @@ export default function MapScreen({ route, navigation }) {
 
     // If the closest pin is further than 5km, center on user at zoom 13
     const nearest = localPins[0];
-    const nearestLat = nearest.location?.latitude || nearest.geometry?.location?.lat;
-    const nearestLng = nearest.location?.longitude || nearest.geometry?.location?.lng;
+    const nearestLat = nearest?.location?.latitude ?? nearest?.geometry?.location?.lat;
+    const nearestLng = nearest?.location?.longitude ?? nearest?.geometry?.location?.lng;
     
-    if (typeof nearestLat === 'number' && typeof nearestLng === 'number') {
-      const distToNearest = haversineDistance(originLat, originLng, nearestLat, nearestLng);
-      if (distToNearest > 5000) {
-        cameraRef.current.setCamera({
-          centerCoordinate: [originLng, originLat],
-          zoomLevel: 13,
-          animationDuration: 1000,
-          animationMode: 'easeTo',
-        });
-        return;
-      }
+    if (typeof nearestLat !== 'number' || typeof nearestLng !== 'number' || isNaN(nearestLat) || isNaN(nearestLng)) return;
+
+    const distToNearest = haversineDistance(originLat, originLng, nearestLat, nearestLng);
+    if (distToNearest > 5000) {
+      cameraRef.current.setCamera({
+        centerCoordinate: [originLng, originLat],
+        zoomLevel: 13,
+        animationDuration: 1000,
+        animationMode: 'easeTo',
+      });
+      return;
     }
 
     // ── Density Detection & Clustering ──
@@ -431,13 +498,13 @@ export default function MapScreen({ route, navigation }) {
     // If so, we should focus on the cluster and apply an optimal minimum box span (zoom ~17-18)
     // so pins do not overlap but are also not street-view level 20.
     const pinsWithDistance = localPins.map(p => {
-      const lat = p.location?.latitude || p.geometry?.location?.lat;
-      const lng = p.location?.longitude || p.geometry?.location?.lng;
-      const dist = (typeof lat === 'number' && typeof lng === 'number')
+      const lat = p.location?.latitude ?? p.geometry?.location?.lat;
+      const lng = p.location?.longitude ?? p.geometry?.location?.lng;
+      const dist = (typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng))
         ? haversineDistance(nearestLat, nearestLng, lat, lng)
         : Infinity;
       return { pin: p, lat, lng, dist };
-    }).filter(p => p.dist !== Infinity);
+    }).filter(p => p.dist !== Infinity && !isNaN(p.dist) && typeof p.lat === 'number' && typeof p.lng === 'number' && !isNaN(p.lat) && !isNaN(p.lng));
 
     // If there is at least one other pin within 400 meters of the nearest pin,
     // we classify it as a dense cluster.
@@ -582,12 +649,29 @@ export default function MapScreen({ route, navigation }) {
     setShowSearchButton(false);
     setSearching(true);
     const { lat, lng } = currentMapCenter.current;
+    const origin = searchOrigin ?? location;
     
-    await searchArea(lat, lng, 10000, location);
+    if (activeCategory === 'food') {
+      await searchHalalFood(lat, lng, origin, 20, true);
+    } else {
+      await searchArea(lat, lng, 10000, origin, 10, true);
+    }
     
     lastFetchedLocation.current = { lat, lng };
     setSearching(false);
-  }, [searchArea, location]);
+  }, [searchArea, searchHalalFood, searchOrigin, location, activeCategory]);
+
+  const handleSearchWiderArea = useCallback(async () => {
+    const origin = searchOrigin ?? location;
+    if (!origin?.coords) return;
+    const { latitude: lat, longitude: lng } = origin.coords;
+    setShowSearchButton(false);
+    if (activeCategory === 'food') {
+      await searchHalalFood(lat, lng, origin, 20, true);
+    } else {
+      await searchArea(lat, lng, 30000, origin, 20, true);
+    }
+  }, [searchOrigin, location, activeCategory, searchArea, searchHalalFood]);
 
   // ── Route Fetching ─────────────────────────────────────────────────────────
   const fetchRouteForMode = useCallback(async (mode, mosque, originLoc) => {
@@ -599,7 +683,9 @@ export default function MapScreen({ route, navigation }) {
     try {
       const googleMode = { 'driving-traffic': 'driving', walking: 'walking', transit: 'transit' }[mode] ?? 'driving';
       const oLat = originLoc.coords.latitude, oLng = originLoc.coords.longitude;
-      const dLat = mosque.location.latitude, dLng = mosque.location.longitude;
+      const dLat = mosque.location?.latitude ?? mosque.geometry?.location?.lat;
+      const dLng = mosque.location?.longitude ?? mosque.geometry?.location?.lng;
+      if (typeof dLat !== 'number' || typeof dLng !== 'number') return;
       const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${oLat},${oLng}&destination=${dLat},${dLng}&mode=${googleMode}&alternatives=true&key=${GOOGLE_PLACES_API_KEY}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -614,7 +700,7 @@ export default function MapScreen({ route, navigation }) {
           cameraRef.current?.setCamera({
             bounds: {
               ne: [Math.max(...lngs), Math.max(...lats)], sw: [Math.min(...lngs), Math.min(...lats)],
-              paddingTop: 200, paddingBottom: 180, paddingLeft: 30, paddingRight: 30,
+              paddingTop: 150, paddingBottom: 50, paddingLeft: 20, paddingRight: 20,
             },
             animationDuration: 900, animationMode: 'easeTo',
           });
@@ -627,17 +713,16 @@ export default function MapScreen({ route, navigation }) {
   const openPlaceSheet = useCallback((fullPlace) => {
     console.log('Opening Sheet for:', fullPlace?.displayName?.text || fullPlace?.name);
 
-    if (!fullPlace || !fullPlace.location) return;
+    const placeLat = fullPlace?.location?.latitude ?? fullPlace?.geometry?.location?.lat;
+    const placeLng = fullPlace?.location?.longitude ?? fullPlace?.geometry?.location?.lng;
+    if (!fullPlace || typeof placeLat !== 'number' || typeof placeLng !== 'number') return;
 
     if (liveCameraState.current) {
       savedCamera.current = { ...liveCameraState.current };
     }
     setFollowUser(false);
     cameraRef.current?.setCamera({
-      centerCoordinate: [
-        fullPlace.location.longitude || fullPlace.geometry?.location?.lng, 
-        fullPlace.location.latitude || fullPlace.geometry?.location?.lat
-      ],
+      centerCoordinate: [placeLng, placeLat],
       zoomLevel: 15,
       animationDuration: 500,
       animationMode: 'easeTo',
@@ -708,12 +793,16 @@ export default function MapScreen({ route, navigation }) {
       setSelectedMosque(null);
       if (!searchOrigin) setFollowUser(true);
       
-      // Auto-fetch surrounding mosques if we only have 1 (from a specific mosque search)
-      if (mosques.length === 1 && searchOrigin) {
-        searchArea(searchOrigin.coords.latitude, searchOrigin.coords.longitude, MAX_RADIUS_METERS, searchOrigin, 10, false);
+      // Auto-fetch surrounding places if we only have 1 (from a specific place search)
+      if (displayData.length === 1 && searchOrigin) {
+        if (activeCategory === 'food') {
+          searchHalalFood(searchOrigin.coords.latitude, searchOrigin.coords.longitude, searchOrigin, 10, false);
+        } else {
+          searchArea(searchOrigin.coords.latitude, searchOrigin.coords.longitude, MAX_RADIUS_METERS, searchOrigin, 10, false);
+        }
       }
     }
-  }, [mosques.length, searchOrigin, searchArea]);
+  }, [displayData.length, searchOrigin, searchArea, searchHalalFood, activeCategory]);
 
   const handleCloseSheet = useCallback(() => { bottomSheetRef.current?.close(); }, []);
 
@@ -836,44 +925,20 @@ export default function MapScreen({ route, navigation }) {
     }
   }, [pendingWalkMosque, location, fetchRouteForMode]);
 
-  // ── sortedMosques MUST be before any early returns (React hook rules) ──────
-  const sortedMosques = useMemo(() => {
-    if (!listStartLocation) return mosques || [];
-    return [...(mosques || [])].map(m => {
-      const pLat = m.location?.latitude || m.geometry?.location?.lat;
-      const pLng = m.location?.longitude || m.geometry?.location?.lng;
-      if (!pLat || !pLng) return m;
-      const distMeters = haversineDistance(
-        listStartLocation.coords.latitude,
-        listStartLocation.coords.longitude,
-        pLat, pLng
-      );
-      return { ...m, distMeters };
-    }).sort((a, b) => a.distMeters - b.distMeters);
-  }, [mosques, listStartLocation]);
 
-  const sortedFood = useMemo(() => {
-    if (!listStartLocation) return halalFood || [];
-    return [...(halalFood || [])].map(f => {
-      const pLat = f.location?.latitude || f.geometry?.location?.lat;
-      const pLng = f.location?.longitude || f.geometry?.location?.lng;
-      if (!pLat || !pLng) return f;
-      const distMeters = haversineDistance(
-        listStartLocation.coords.latitude,
-        listStartLocation.coords.longitude,
-        pLat, pLng
-      );
-      return { ...f, distMeters };
-    }).sort((a, b) => a.distMeters - b.distMeters);
-  }, [halalFood, listStartLocation]);
-
-  const displayData = activeCategory === 'mosque' ? sortedMosques : sortedFood;
 
   // ── Guards ─────────────────────────────────────────────────────────────────
-  if (loading || !location) return <View style={styles.center}><ActivityIndicator size="large" color="#4A90E2" /><Text style={styles.loadingText}>Finding your location…</Text></View>;
+  if (!location) {
+    return (
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary || '#059669'} />
+        <Text style={[styles.loadingText, { color: theme.text }]}>Finding your location…</Text>
+      </View>
+    );
+  }
   if (error) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
         <Ionicons name='location-outline' size={48} color={theme.text} style={{marginBottom: 16}} />
         <Text style={styles.errorMessage}>{error}</Text>
       </View>
@@ -894,7 +959,7 @@ export default function MapScreen({ route, navigation }) {
       const miles = distMeters * 0.000621371;
       distText = miles >= 0.1 ? `${miles.toFixed(1)} mi` : `${Math.round(distMeters * 3.28084)} ft`;
     }
-    const walkMins = Math.round(distMeters / 80);
+    const walkMins = (distMeters && !isNaN(distMeters)) ? Math.round(distMeters / 80) : null;
     let photoUrl = null;
     if (item.photos?.[0]?.name) {
       photoUrl = `https://places.googleapis.com/v1/${item.photos[0].name}/media?maxWidthPx=200&key=${process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY}`;
@@ -904,7 +969,7 @@ export default function MapScreen({ route, navigation }) {
 
     return (
       <TouchableOpacity
-        style={[styles.uberCard, { backgroundColor: theme.card }]}
+        style={[styles.uberCard, { backgroundColor: theme.card, borderBottomColor: theme.border }]}
         onPress={() => openPlaceSheet(item)}
         activeOpacity={0.7}
       >
@@ -918,11 +983,11 @@ export default function MapScreen({ route, navigation }) {
 
         <View style={styles.uberInfo}>
           <Text style={[styles.uberName, { color: theme.text }]} numberOfLines={1}>{item.displayName?.text || item.name}</Text>
-          <Text style={{ fontSize: 13, color: theme.primary, marginTop: 2, fontWeight: '700' }}>
+          <Text style={{ fontSize: 13, color: theme.primary, marginTop: 2, fontFamily: 'Syne-Bold' }}>
             <Ionicons name='star' size={14} color='#fbc02d' /> {item.rating ? item.rating.toFixed(1) : 'New'}
           </Text>
           {item.formattedAddress && (
-            <Text style={{ fontSize: 13, color: theme.subText, marginTop: 4, fontWeight: '500' }} numberOfLines={1}>{item.formattedAddress}</Text>
+            <Text style={{ fontSize: 13, color: theme.subText, marginTop: 4, lineHeight: 18 }} numberOfLines={1}>{item.formattedAddress}</Text>
           )}
           {item.regularOpeningHours?.openNow === false && (
             <Text style={styles.uberClosedText}>Closed</Text>
@@ -930,7 +995,7 @@ export default function MapScreen({ route, navigation }) {
         </View>
 
         <View style={styles.uberMetrics}>
-          <Text style={[styles.uberWalk, { color: theme.text }]}>{walkMins} min</Text>
+          <Text style={[styles.uberWalk, { color: theme.text }]}>{walkMins != null ? `${walkMins} min` : '—'}</Text>
           <Text style={[styles.uberDist, { color: theme.subText }]}>{distText}</Text>
         </View>
       </TouchableOpacity>
@@ -948,9 +1013,16 @@ export default function MapScreen({ route, navigation }) {
       {/* ── Top Controls: Location Search Pill & Category Toggle ── */}
       {!isNavigating && !isPreviewingRoute && (
         <View style={[styles.topControlsContainer, { top: insets.top + (viewMode === 'list' ? 10 : 16) }]} pointerEvents="box-none">
-          {/* Location Search Pill */}
+          {/* Location Search Pill with Liquid Glass styling */}
           <TouchableOpacity 
-            style={[styles.searchPill, { backgroundColor: theme.card }]} 
+            style={[
+              styles.searchPill, 
+              { 
+                backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.85)' : 'rgba(255, 255, 255, 0.88)',
+                borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+                borderWidth: 1,
+              }
+            ]} 
             onPress={() => setSearchModalVisible(true)}
             activeOpacity={0.8}
           >
@@ -961,8 +1033,15 @@ export default function MapScreen({ route, navigation }) {
             <Text style={[styles.searchPillChevron, { color: theme.subText }]}>⌄</Text>
           </TouchableOpacity>
 
-          {/* Category Toggle */}
-          <View style={[styles.categoryTogglePill, { backgroundColor: theme.card }]}>
+          {/* Category Toggle with Liquid Glass styling */}
+          <View style={[
+            styles.categoryTogglePill, 
+            { 
+              backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.85)' : 'rgba(255, 255, 255, 0.88)',
+              borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+              borderWidth: 1,
+            }
+          ]}>
             <TouchableOpacity
               style={[styles.categoryToggleSegment, activeCategory === 'mosque' && [styles.toggleSegmentActive, { backgroundColor: theme.tint }]]}
               onPress={() => {
@@ -976,7 +1055,7 @@ export default function MapScreen({ route, navigation }) {
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={[styles.categoryToggleSegment, activeCategory === 'food' && [styles.toggleSegmentActive, { backgroundColor: '#B5651D' }]]}
+              style={[styles.categoryToggleSegment, activeCategory === 'food' && [styles.toggleSegmentActive, { backgroundColor: '#EA580C' }]]}
               onPress={() => {
                 setActiveCategory('food');
                 setSelectedMosque(null);
@@ -1024,37 +1103,6 @@ export default function MapScreen({ route, navigation }) {
               hitbox={{ width: 44, height: 44 }}
             />
 
-            {/* Using MarkerView for custom React Native UI components! 
-                Capped at top 20 nearest places to completely eliminate Android map lag
-                while perfectly preserving standard React Native UI rendering without native clipping bugs. */}
-            {(isPreviewingRoute ? (displayData || []).filter(m => m.id === selectedMosque?.id) : (displayData || []))
-              .filter(item => {
-                const lng = item.location?.longitude || item.geometry?.location?.lng;
-                const lat = item.location?.latitude || item.geometry?.location?.lat;
-                return typeof lng === 'number' && typeof lat === 'number' && !isNaN(lng) && !isNaN(lat);
-              })
-              .slice(0, 20)
-              .map((item, index) => {
-                const lng = item.location?.longitude || item.geometry?.location?.lng;
-                const lat = item.location?.latitude || item.geometry?.location?.lat;
-
-                return (
-                <Mapbox.PointAnnotation
-                  key={`pa-${activeCategory}-${item.id || item.place_id || index.toString()}`}
-                  id={`pa-${activeCategory}-${item.id || index}`}
-                  coordinate={[lng, lat]}
-                  anchor={{ x: 0.5, y: 1.0 }}
-                  onSelected={() => openPlaceSheet(item)}
-                >
-                  <View style={styles.markerWrapper} collapsable={false}>
-                    <View style={[styles.marker, activeCategory === 'food' ? { backgroundColor: '#B5651D' } : {}]} collapsable={false}>
-                      <MaterialCommunityIcons name={activeCategory === 'food' ? 'silverware-fork-knife' : 'mosque'} size={18} color='#fff' />
-                    </View>
-                    <View style={[styles.markerStem, activeCategory === 'food' ? { backgroundColor: '#B5651D' } : {}]} collapsable={false} />
-                  </View>
-                </Mapbox.PointAnnotation>
-              )})}
-
             {/* Drive/transit route line */}
             {routeGeoJSON && (
               <Mapbox.ShapeSource id="routeSource" shape={routeGeoJSON}>
@@ -1081,6 +1129,40 @@ export default function MapScreen({ route, navigation }) {
                 />
               </Mapbox.ShapeSource>
             )}
+
+            {/* Using MarkerView for custom React Native UI components! 
+                Capped at top 20 nearest places to completely eliminate Android map lag
+                while perfectly preserving standard React Native UI rendering without native clipping bugs. */}
+            {(isPreviewingRoute ? (displayData || []).filter(m => m.id === selectedMosque?.id) : (displayData || []))
+              .filter(item => {
+                const lng = item.location?.longitude || item.geometry?.location?.lng;
+                const lat = item.location?.latitude || item.geometry?.location?.lat;
+                return typeof lng === 'number' && typeof lat === 'number' && !isNaN(lng) && !isNaN(lat);
+              })
+              .slice(0, 20)
+              .map((item, index) => {
+                const lng = item.location?.longitude || item.geometry?.location?.lng;
+                const lat = item.location?.latitude || item.geometry?.location?.lat;
+
+                return (
+                <Mapbox.MarkerView
+                  key={`pa-${activeCategory}-${item.id || item.place_id || index.toString()}`}
+                  id={`pa-${activeCategory}-${item.id || index}`}
+                  coordinate={[lng, lat]}
+                  allowOverlap={true}
+                >
+                  <TouchableOpacity 
+                    style={styles.markerWrapper} 
+                    onPress={() => openPlaceSheet(item)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[styles.marker, activeCategory === 'food' ? { backgroundColor: '#EA580C' } : {}]} collapsable={false}>
+                      <MaterialCommunityIcons name={activeCategory === 'food' ? 'silverware-fork-knife' : 'mosque'} size={18} color='#fff' />
+                    </View>
+                    <View style={[styles.markerStem, activeCategory === 'food' ? { backgroundColor: '#EA580C' } : {}]} collapsable={false} />
+                  </TouchableOpacity>
+                </Mapbox.MarkerView>
+              )})}
 
             {/* Car park marker */}
             {activeParkingLot && (
@@ -1125,19 +1207,19 @@ export default function MapScreen({ route, navigation }) {
       {/* ── CONDITIONAL MAIN VIEW: LIST ── */}
       {!isNavigating && viewMode === 'list' && (
         <View style={[styles.listContainer, { backgroundColor: theme.background }]}>
-          <View style={[styles.listHeader, { paddingTop: insets.top + (showSearchButton ? 55 : 45), backgroundColor: theme.background }]}>
+          <View style={[styles.listHeader, { paddingTop: insets.top + (showSearchButton ? 55 : 45), backgroundColor: theme.background, borderBottomColor: theme.border }]}>
             <View>
               <Text style={[styles.listHeaderTitle, { color: theme.text }]}>
                 {activeCategory === 'food' ? 'Nearby Halal Food' : 'Nearby Mosques'}
               </Text>
               <TouchableOpacity 
-                style={[styles.listHeaderLocationPill, { backgroundColor: theme.chipBg }]}
+                style={[styles.listHeaderLocationPill, { backgroundColor: theme.chipBg, borderColor: theme.border }]}
                 onPress={() => { setIsStartLocationSearch(true); setSearchModalVisible(true); }}
                 activeOpacity={0.7}
               >
                 <Ionicons name='location-sharp' size={18} color={theme.primary} />
                 <Text style={[styles.listHeaderLocationText, { color: theme.text }]} numberOfLines={1}>
-                  <Text style={{color: theme.subText, fontWeight: '500'}}>Start: </Text>
+                  <Text style={{color: theme.subText, fontFamily: 'Syne-Bold'}}>Start: </Text>
                   {listStartLocation?.name || 'Your Location'}
                 </Text>
                 <Text style={[styles.listHeaderLocationChevron, { color: theme.subText }]}>⌄</Text>
@@ -1169,18 +1251,49 @@ export default function MapScreen({ route, navigation }) {
                 colors={['#059669']}
               />
             }
+            ListEmptyComponent={() => (
+              <View style={styles.listEmptyContainer}>
+                {isPlacesLoading ? (
+                  <>
+                    <ActivityIndicator size="large" color={theme.primary || '#059669'} />
+                    <Text style={[styles.listEmptyTitle, { color: theme.text, marginTop: 14 }]}>
+                      Searching for nearby {activeCategory === 'food' ? 'halal eateries' : 'mosques'}…
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="location-outline" size={48} color={theme.subText} style={{ marginBottom: 12 }} />
+                    <Text style={[styles.listEmptyTitle, { color: theme.text }]}>
+                      No {activeCategory === 'food' ? 'halal food' : 'mosques'} found nearby
+                    </Text>
+                    <Text style={[styles.listEmptySubtitle, { color: theme.subText }]}>
+                      Try searching with a wider radius or exploring another location.
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.widerSearchBtn, { backgroundColor: theme.primary || '#059669' }]}
+                      onPress={handleSearchWiderArea}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="scan-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+                      <Text style={styles.widerSearchBtnText}>Search Wider Area (30 km)</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            )}
             ListFooterComponent={() => {
               if (activeCategory === 'food') return null;
               if (fetchCount >= 20) return null;
+              if (displayData.length === 0) return null;
               return (
                 <View style={styles.loadMoreContainer}>
                   <TouchableOpacity
                     style={styles.loadMoreButton}
                     onPress={loadMoreMosques}
-                    disabled={loading}
+                    disabled={isPlacesLoading}
                     activeOpacity={0.7}
                   >
-                    {loading ? (
+                    {isPlacesLoading ? (
                       <ActivityIndicator size="small" color="#059669" />
                     ) : (
                       <Text style={styles.loadMoreButtonText}>Load More Mosques</Text>
@@ -1190,6 +1303,48 @@ export default function MapScreen({ route, navigation }) {
               );
             }}
           />
+        </View>
+      )}
+
+      {/* ── Places Loading indicator for Map View ──── */}
+      {isPlacesLoading && !isPreviewingRoute && viewMode === 'map' && !searching && (
+        <View style={[
+          styles.mapFloatingStatusPill, 
+          { 
+            top: insets.top + (showSearchButton ? 120 : 76), 
+            backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.90)' : 'rgba(255, 255, 255, 0.92)',
+            borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+            borderWidth: 1,
+          }
+        ]}>
+          <ActivityIndicator size="small" color={theme.primary || '#059669'} style={{ marginRight: 8 }} />
+          <Text style={[styles.mapFloatingStatusText, { color: theme.text }]}>
+            Searching nearby {activeCategory === 'food' ? 'halal food' : 'mosques'}…
+          </Text>
+        </View>
+      )}
+
+      {/* ── No Results banner on Map ──── */}
+      {!isPlacesLoading && displayData.length === 0 && !isPreviewingRoute && viewMode === 'map' && !showSearchButton && (
+        <View style={[
+          styles.mapFloatingStatusPill, 
+          { 
+            top: insets.top + 76, 
+            backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.90)' : 'rgba(255, 255, 255, 0.92)',
+            borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+            borderWidth: 1,
+          }
+        ]}>
+          <Text style={[styles.mapFloatingStatusText, { color: theme.text, marginRight: 8 }]}>
+            No {activeCategory === 'food' ? 'halal food' : 'mosques'} found nearby
+          </Text>
+          <TouchableOpacity
+            style={[styles.mapSearchWiderBtn, { backgroundColor: theme.primary || '#059669' }]}
+            onPress={handleSearchWiderArea}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.mapSearchWiderBtnText}>Search 30km</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1206,10 +1361,18 @@ export default function MapScreen({ route, navigation }) {
         </TouchableOpacity>
       )}
 
-      {/* ── View Mode Toggle ── */}
+      {/* ── View Mode Toggle with Liquid Glass styling ── */}
       {!isNavigating && !isPreviewingRoute && (
         <View style={[styles.togglePillContainer, { bottom: insets.bottom + 30 }]} pointerEvents="box-none">
-          <View style={[styles.togglePill, { backgroundColor: theme.card, shadowColor: theme.mode === 'dark' ? '#000' : '#475569' }]}>
+          <View style={[
+            styles.togglePill, 
+            { 
+              backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.85)' : 'rgba(255, 255, 255, 0.88)',
+              borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.65)',
+              borderWidth: 1,
+              shadowColor: theme.mode === 'dark' ? '#000' : '#475569',
+            }
+          ]}>
             <TouchableOpacity
               style={[styles.toggleSegment, viewMode === 'map' && [styles.toggleSegmentActive, { backgroundColor: theme.tint }]]}
               onPress={() => setViewMode('map')}
@@ -1272,8 +1435,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
   loadingText: { marginTop: 16, fontSize: 16, color: '#666' },
   errorIcon: { fontSize: 48, marginBottom: 12 },
-  errorMessage: { fontSize: 16, color: '#d32f2f', textAlign: 'center', paddingHorizontal: 20 },
-  suspenseTitle: { marginTop: 20, fontSize: 20, fontWeight: '700', color: '#111' },
+  errorMessage: { fontSize: 16, color: '#d32f2f', textAlign: 'center', paddingHorizontal: 20, lineHeight: 22 },
+  suspenseTitle: { marginTop: 20, fontSize: 20, fontFamily: 'Unbounded-Bold', color: '#111' },
 
   // Top Controls Container
   topControlsContainer: {
@@ -1293,15 +1456,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
     paddingHorizontal: 16,
     height: 48,
     borderRadius: 24,
-    elevation: 8,
+    elevation: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
   },
   searchPillIcon: {
     fontSize: 14,
@@ -1309,7 +1471,7 @@ const styles = StyleSheet.create({
   },
   searchPillText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Syne-Bold',
     color: '#0F172A',
     flexShrink: 1,
   },
@@ -1342,22 +1504,21 @@ const styles = StyleSheet.create({
   searchButtonText: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     letterSpacing: 0.2,
   },
 
   // Category Toggle Pill (Top right)
   categoryTogglePill: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
     borderRadius: 24,
     height: 48,
     padding: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
   },
   categoryToggleSegment: {
     paddingHorizontal: 16,
@@ -1376,14 +1537,13 @@ const styles = StyleSheet.create({
   },
   togglePill: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
     borderRadius: 30,
     padding: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.12,
     shadowRadius: 16,
-    elevation: 8,
+    elevation: 6,
   },
   toggleSegment: {
     paddingHorizontal: 20,
@@ -1419,7 +1579,7 @@ const styles = StyleSheet.create({
   },
   listHeaderTitle: {
     fontSize: 22,
-    fontWeight: '800',
+    fontFamily: 'Unbounded-Bold',
     color: '#0F172A',
   },
   listHeaderLocationPill: {
@@ -1441,7 +1601,7 @@ const styles = StyleSheet.create({
   listHeaderLocationText: {
     fontSize: 13,
     color: '#0F172A',
-    fontWeight: '600',
+    fontFamily: 'Syne-Bold',
     maxWidth: 200,
   },
   listHeaderLocationChevron: {
@@ -1460,7 +1620,7 @@ const styles = StyleSheet.create({
   listHeaderSearchButtonText: {
     color: '#fff',
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
   },
   listContent: {
     paddingBottom: 120, // space for toggle button
@@ -1482,17 +1642,15 @@ const styles = StyleSheet.create({
   },
   loadMoreButtonText: {
     color: '#059669', // Emerald Dark
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     fontSize: 14,
   },
   uberCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9', // ultra light separator
   },
   uberImage: {
     width: 60,
@@ -1515,13 +1673,13 @@ const styles = StyleSheet.create({
   },
   uberName: {
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#0F172A',
     letterSpacing: -0.3,
   },
   uberClosedText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: 'Syne-Bold',
     color: '#E11D48', // rose-600
     marginTop: 2,
     textTransform: 'uppercase',
@@ -1532,14 +1690,16 @@ const styles = StyleSheet.create({
   },
   uberWalk: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#059669', // emerald
+    fontVariant: ['tabular-nums'],
   },
   uberDist: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Syne-Bold',
     color: '#64748B', // slate grey
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   // Bottom Sheet wrapper — elevated above Android map layer
   sheetContainer: {
@@ -1571,6 +1731,72 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 2, borderBottomRightRadius: 2, elevation: 2,
   },
 
+  listEmptyContainer: {
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listEmptyTitle: {
+    fontSize: 18,
+    fontFamily: 'Unbounded-Bold',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  listEmptySubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  widerSearchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+  },
+  widerSearchBtnText: {
+    color: '#ffffff',
+    fontFamily: 'Unbounded-Bold',
+    fontSize: 13,
+  },
+  mapFloatingStatusPill: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    elevation: 6,
+    zIndex: 98,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  mapFloatingStatusText: {
+    fontSize: 13,
+    fontFamily: 'Syne-Bold',
+  },
+  mapSearchWiderBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  mapSearchWiderBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontFamily: 'Unbounded-Bold',
+  },
+
   // Loading Overlay
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1583,7 +1809,7 @@ const styles = StyleSheet.create({
   loadingOverlayText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     marginTop: 16,
     letterSpacing: 0.5,
   },
