@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#0f172a',
     flex: 1,
   },
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   },
   closeBtnText: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontFamily: 'Unbounded-Bold',
     color: '#334155',
   },
   content: {
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontFamily: 'Unbounded-Bold',
     color: '#1e293b',
     marginBottom: 16,
     letterSpacing: -0.3,
@@ -312,13 +312,13 @@ const styles = StyleSheet.create({
   },
   amenityLabel: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Syne-Bold',
     color: '#334155',
     marginBottom: 2,
   },
   amenityValue: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: 'Syne-Regular',
   },
   trustScoreRow: {
     flexDirection: 'row',
@@ -329,6 +329,7 @@ const styles = StyleSheet.create({
   },
   trustScoreText: {
     fontSize: 13,
+    fontFamily: 'Syne-Regular',
     color: '#64748b',
     fontWeight: '500',
   },
@@ -347,7 +348,7 @@ const styles = StyleSheet.create({
   },
   confirmBtnText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#2563eb',
   },
   confirmBtnTextDisabled: {
@@ -373,11 +374,13 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 16,
+    fontFamily: 'Syne-Bold',
     color: '#334155',
     fontWeight: '600',
   },
   noDataText: {
     fontSize: 15,
+    fontFamily: 'Syne-Regular',
     color: '#64748b',
     fontStyle: 'italic',
   },
@@ -401,6 +404,7 @@ const styles = StyleSheet.create({
   },
   ctaSubtitle: {
     fontSize: 16,
+    fontFamily: 'Syne-Regular',
     color: '#475569',
     marginBottom: 20,
     textAlign: 'center',
@@ -422,7 +426,7 @@ const styles = StyleSheet.create({
   ctaButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
   },
   secondaryCtaBtn: {
     paddingVertical: 12,
@@ -430,7 +434,7 @@ const styles = StyleSheet.create({
   secondaryCtaText: {
     fontSize: 14,
     color: '#64748b',
-    fontWeight: '600',
+    fontFamily: 'Unbounded-Bold',
     textDecorationLine: 'underline',
   },
 });

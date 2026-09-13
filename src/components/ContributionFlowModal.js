@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Syne-Bold',
     color: '#64748b',
     marginBottom: 12,
     textTransform: 'uppercase',
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   },
   questionText: {
     fontSize: 26,
-    fontWeight: '800',
+    fontFamily: 'Unbounded-Bold',
     color: '#0f172a',
     textAlign: 'center',
     lineHeight: 36,
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   },
   btnTextYes: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#2563eb', // blue-600
   },
   btnNo: {
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   },
   btnTextNo: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#475569',
   },
   btnNotSure: {
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   },
   btnTextNotSure: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Unbounded-Bold',
     color: '#94a3b8',
   },
   
@@ -336,12 +336,13 @@ const styles = StyleSheet.create({
   },
   successTitle: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: 'Unbounded-Bold',
     color: '#0f172a',
     marginBottom: 16,
   },
   successSubtitle: {
     fontSize: 18,
+    fontFamily: 'Syne-Regular',
     color: '#64748b',
     textAlign: 'center',
     marginBottom: 48,
@@ -358,7 +359,7 @@ const styles = StyleSheet.create({
   doneBtnText: {
     color: '#fff',
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
   },
 });
 

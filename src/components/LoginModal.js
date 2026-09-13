@@ -174,12 +174,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontWeight: '800',
+    fontFamily: 'Unbounded-Bold',
     color: '#0f172a',
     marginBottom: 12,
   },
   subtitle: {
     fontSize: 15,
+    fontFamily: 'Syne-Regular',
     color: '#64748b',
     textAlign: 'center',
     marginBottom: 32,
@@ -211,12 +212,12 @@ const styles = StyleSheet.create({
   },
   googleBtnText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Unbounded-Bold',
     color: '#334155',
   },
   appleBtnText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Unbounded-Bold',
     color: '#fff',
   },
   cancelBtn: {
@@ -225,7 +226,7 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Unbounded-Bold',
     color: '#64748b',
   },
   errorText: {

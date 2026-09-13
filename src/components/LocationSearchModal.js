@@ -187,6 +187,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
+    fontFamily: 'Syne-Regular',
     paddingVertical: 0,
     height: '100%',
   },
@@ -202,7 +203,7 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Unbounded-Bold',
   },
   loadingContainer: {
     padding: 20,
@@ -229,10 +230,11 @@ const styles = StyleSheet.create({
   },
   mainText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Unbounded-Bold',
   },
   secondaryText: {
     fontSize: 14,
+    fontFamily: 'Syne-Regular',
     marginTop: 2,
   },
 });

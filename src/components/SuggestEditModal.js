@@ -276,17 +276,17 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 16,
     color: '#64748b',
-    fontWeight: '500',
+    fontFamily: 'Unbounded-Bold',
   },
   submitText: {
     fontSize: 16,
     color: '#3b82f6',
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     textAlign: 'right',
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#0f172a',
   },
   content: {
@@ -295,12 +295,13 @@ const styles = StyleSheet.create({
   },
   mosqueName: {
     fontSize: 22,
-    fontWeight: '800',
+    fontFamily: 'Unbounded-Bold',
     color: '#0f172a',
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 15,
+    fontFamily: 'Syne-Regular',
     color: '#64748b',
     marginBottom: 24,
   },
@@ -317,7 +318,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#1e293b',
     marginBottom: 16,
   },
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
   },
   rowLabel: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Syne-Bold',
     color: '#334155',
   },
   timeRow: {
@@ -355,7 +356,7 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Syne-Bold',
     color: '#334155',
   },
   removeBtn: {
@@ -376,7 +377,7 @@ const styles = StyleSheet.create({
   },
   addBtnText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Unbounded-Bold',
     color: '#3b82f6',
     marginLeft: 6,
   },
