@@ -180,6 +180,23 @@ const MosqueDetailSheet = React.forwardRef(
     const isOpenNow = details?.regularOpeningHours?.openNow;
     const weekdayText = details?.regularOpeningHours?.weekdayDescriptions;
 
+    const parsedHours = useMemo(() => {
+      if (!weekdayText || !Array.isArray(weekdayText)) return [];
+      return weekdayText.map((line) => {
+        const parts = line.split(': ');
+        const day = parts[0] || '';
+        const hours = parts.slice(1).join(': ') || '';
+        return { day, hours, raw: line };
+      });
+    }, [weekdayText]);
+
+    const todayParsedHours = useMemo(() => {
+      if (!parsedHours.length) return null;
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const currentDay = dayNames[new Date().getDay()];
+      return parsedHours.find(h => h.day.toLowerCase().includes(currentDay.toLowerCase())) || parsedHours[0];
+    }, [parsedHours]);
+
     // ── Pre-compute Countdown ──
     const minsUntilPrayer = useMemo(() => {
       if (!nextPrayer || !nextPrayer.timeObj) return null;
@@ -352,23 +369,29 @@ const MosqueDetailSheet = React.forwardRef(
           )}
  
           {/* ── Live Stats ── */}
-          <View style={[styles.statsRow, { backgroundColor: theme.chipBg, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth }]}>
+          <View style={[styles.statsRow, { backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.6)' : 'rgba(241, 245, 249, 0.85)', borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)' }]}>
             <View style={styles.statBox}>
-              <Ionicons name="car-outline" size={16} color="#3B82F6" style={{ marginRight: 6 }} />
+              <View style={[styles.statIconBadge, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                <Ionicons name="car-outline" size={15} color="#3B82F6" />
+              </View>
               <Text style={[styles.statValue, { color: theme.text }]}>
                 {estimatedTimes?.['driving-traffic'] ? `${estimatedTimes['driving-traffic']} min` : '—'}
               </Text>
             </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+            <View style={[styles.statDivider, { backgroundColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)' }]} />
             <View style={styles.statBox}>
-              <Ionicons name="walk-outline" size={16} color="#F97316" style={{ marginRight: 6 }} />
+              <View style={[styles.statIconBadge, { backgroundColor: 'rgba(249, 115, 22, 0.12)' }]}>
+                <Ionicons name="walk-outline" size={15} color="#F97316" />
+              </View>
               <Text style={[styles.statValue, { color: theme.text }]}>
                 {estimatedTimes?.walking ? `${estimatedTimes.walking} min` : '—'}
               </Text>
             </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
+            <View style={[styles.statDivider, { backgroundColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)' }]} />
             <View style={styles.statBox}>
-              <Ionicons name="subway-outline" size={16} color="#8B5CF6" style={{ marginRight: 6 }} />
+              <View style={[styles.statIconBadge, { backgroundColor: 'rgba(139, 92, 246, 0.12)' }]}>
+                <Ionicons name="subway-outline" size={15} color="#8B5CF6" />
+              </View>
               <Text style={[styles.statValue, { color: theme.text }]}>
                 {estimatedTimes?.transit ? `${estimatedTimes.transit} min` : '—'}
               </Text>
@@ -378,7 +401,7 @@ const MosqueDetailSheet = React.forwardRef(
           {/* ── Action Buttons ── */}
           <View style={styles.actionBar}>
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: theme.chipBg, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth }]}
+              style={[styles.actionBtn, { backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.75)' : 'rgba(241, 245, 249, 0.95)', borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)' }]}
               onPress={handleInfo}
               activeOpacity={0.7}
             >
@@ -386,7 +409,7 @@ const MosqueDetailSheet = React.forwardRef(
               <Text style={[styles.actionLabel, { color: theme.text }]}>Info</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: theme.chipBg, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth }]}
+              style={[styles.actionBtn, { backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.75)' : 'rgba(241, 245, 249, 0.95)', borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)' }]}
               onPress={handleWebsite}
               activeOpacity={0.7}
             >
@@ -395,7 +418,7 @@ const MosqueDetailSheet = React.forwardRef(
             </TouchableOpacity>
             {onShowOnMap && (
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: theme.chipBg, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth }]}
+                style={[styles.actionBtn, { backgroundColor: theme.mode === 'dark' ? 'rgba(30, 41, 59, 0.75)' : 'rgba(241, 245, 249, 0.95)', borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)' }]}
                 onPress={onShowOnMap}
                 activeOpacity={0.7}
               >
@@ -404,7 +427,7 @@ const MosqueDetailSheet = React.forwardRef(
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[styles.actionBtn, styles.navBtn, { backgroundColor: theme.primary }]}
+              style={[styles.actionBtn, styles.navBtn, { backgroundColor: theme.primary, borderColor: theme.primary }]}
               onPress={handleNavigate}
               activeOpacity={0.7}
             >
@@ -417,30 +440,75 @@ const MosqueDetailSheet = React.forwardRef(
  
           {/* ── Opening Hours ── */}
           {(deepLoading || weekdayText) && (
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
+            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)' }]}>
               <View style={styles.cardHeader}>
-                <Ionicons name="time-outline" size={16} color="#F59E0B" style={{ marginRight: 6 }} />
-                <Text style={[styles.cardTitle, { color: theme.text }]}>Opening Hours</Text>
-                {deepLoading && (
+                <View style={[styles.cardIconBadge, { backgroundColor: theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(245, 158, 11, 0.12)' }]}>
+                  <Ionicons name="time-outline" size={18} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>Opening Hours</Text>
+                  {todayParsedHours && (
+                    <Text style={[styles.cardSubtitle, { color: theme.subText }]}>
+                      Today: <Text style={{ color: theme.text, fontFamily: 'Syne-Bold', fontVariant: ['tabular-nums'] }}>{todayParsedHours.hours}</Text>
+                    </Text>
+                  )}
+                </View>
+                {deepLoading ? (
                   <ActivityIndicator size="small" color={theme.primary} />
-                )}
+                ) : isOpenNow !== undefined ? (
+                  <View style={[
+                    styles.statusPill, 
+                    { backgroundColor: isOpenNow ? (theme.mode === 'dark' ? 'rgba(74, 222, 128, 0.15)' : '#ECFDF5') : (theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2') }
+                  ]}>
+                    <Text style={[styles.statusPillText, { color: isOpenNow ? '#059669' : '#DC2626' }]}>
+                      {isOpenNow ? 'Open Now' : 'Closed'}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
+
               {weekdayText && (
                 <>
                   <TouchableOpacity
                     onPress={() => setHoursExpanded(!hoursExpanded)}
-                    style={styles.hoursToggle}
+                    style={[styles.hoursTogglePill, { backgroundColor: theme.chipBg }]}
+                    activeOpacity={0.7}
                   >
                     <Text style={[styles.hoursToggleText, { color: theme.text }]}>
-                      {hoursExpanded ? 'Hide hours ▲' : 'Show full hours ▼'}
+                      {hoursExpanded ? 'Hide weekly schedule' : 'View full weekly schedule'}
                     </Text>
+                    <Ionicons 
+                      name={hoursExpanded ? "chevron-up" : "chevron-down"} 
+                      size={14} 
+                      color={theme.subText} 
+                    />
                   </TouchableOpacity>
-                  {hoursExpanded &&
-                    weekdayText.map((line, idx) => (
-                      <Text key={idx} style={[styles.hourLine, { color: theme.text }]}>
-                        {line}
-                      </Text>
-                    ))}
+
+                  {hoursExpanded && (
+                    <View style={[styles.scheduleContainer, { borderTopColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)' }]}>
+                      {parsedHours.map((item, idx) => {
+                        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                        const isToday = item.day.toLowerCase().includes(dayNames[new Date().getDay()].toLowerCase());
+                        return (
+                          <View 
+                            key={idx} 
+                            style={[
+                              styles.scheduleRow, 
+                              isToday && [styles.scheduleRowToday, { backgroundColor: theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)' }]
+                            ]}
+                          >
+                            <Text style={[styles.scheduleDay, { color: isToday ? theme.primary : theme.text }]}>
+                              {item.day}
+                              {isToday ? ' (Today)' : ''}
+                            </Text>
+                            <Text style={[styles.scheduleTime, { color: isToday ? theme.primary : theme.subText }]}>
+                              {item.hours}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </>
               )}
             </View>
@@ -448,22 +516,55 @@ const MosqueDetailSheet = React.forwardRef(
  
           {/* ── Nearby Transport ── */}
           {(deepLoading || nearbyTransit.length > 0) && (
-            <View style={[styles.card, { backgroundColor: theme.card }]}>
+            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)' }]}>
               <View style={styles.cardHeader}>
-                <Ionicons name="subway-outline" size={16} color="#8B5CF6" style={{ marginRight: 6 }} />
-                <Text style={[styles.cardTitle, { color: theme.text }]}>Nearby Transport</Text>
+                <View style={[styles.cardIconBadge, { backgroundColor: theme.mode === 'dark' ? 'rgba(139, 92, 246, 0.18)' : 'rgba(139, 92, 246, 0.12)' }]}>
+                  <Ionicons name="subway-outline" size={18} color="#8B5CF6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: theme.text }]}>Nearby Transport</Text>
+                  {nearbyTransit.length > 0 && (
+                    <Text style={[styles.cardSubtitle, { color: theme.subText }]}>
+                      {nearbyTransit.length} station{nearbyTransit.length > 1 ? 's' : ''} within walking distance
+                    </Text>
+                  )}
+                </View>
                 {deepLoading && (
                   <ActivityIndicator size="small" color={theme.primary} />
                 )}
               </View>
-              {nearbyTransit.length > 0 &&
-                nearbyTransit.map((station, idx) => (
-                  <View key={idx} style={[styles.transitRow, { borderBottomColor: theme.border }]}>
-                    <Text style={[styles.transitName, { color: theme.text }]}>{station.name}</Text>
-                    <Text style={[styles.transitDist, { color: theme.subText }]}>{station.distance} m</Text>
-                  </View>
-                ))
-              }
+
+              {nearbyTransit.length > 0 && (
+                <View style={styles.transitList}>
+                  {nearbyTransit.map((station, idx) => {
+                    const isLast = idx === nearbyTransit.length - 1;
+                    return (
+                      <View 
+                        key={idx} 
+                        style={[
+                          styles.transitItem, 
+                          { backgroundColor: theme.chipBg },
+                          !isLast && { marginBottom: 8 }
+                        ]}
+                      >
+                        <View style={styles.transitItemLeft}>
+                          <View style={[styles.transitIconMini, { backgroundColor: theme.mode === 'dark' ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.12)' }]}>
+                            <Ionicons name="train-outline" size={15} color="#8B5CF6" />
+                          </View>
+                          <Text style={[styles.transitName, { color: theme.text }]} numberOfLines={1}>
+                            {station.name}
+                          </Text>
+                        </View>
+                        <View style={[styles.transitDistBadge, { backgroundColor: theme.card }]}>
+                          <Text style={[styles.transitDist, { color: theme.primary }]}>
+                            {station.distance >= 1000 ? `${(station.distance / 1000).toFixed(1)} km` : `${station.distance} m`}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           )}
 
@@ -723,31 +824,41 @@ const styles = StyleSheet.create({
   // Stats
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: '#f7f8fa',
-    borderRadius: 14,
-    padding: 10,
-    marginBottom: 10,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginBottom: 12,
     alignItems: 'center',
+    borderWidth: 1,
   },
   statBox: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  statDivider: { width: 1, height: 20, backgroundColor: '#e0e0e0' },
+  statIconBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  statDivider: { width: 1, height: 18 },
   statLabel: { fontSize: 11, color: '#999', marginBottom: 4, fontFamily: 'Syne-Bold', textTransform: 'uppercase', letterSpacing: 0.5 },
-  statValue: { fontSize: 14, fontFamily: 'Unbounded-Bold', fontVariant: ['tabular-nums'] },
+  statValue: { fontSize: 13.5, fontFamily: 'Unbounded-Bold', fontVariant: ['tabular-nums'] },
   nextPrayerNotice: { fontSize: 14, color: '#059669', fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
 
   // Action bar
   actionBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 16,
     gap: 8,
   },
   actionBtn: {
     flex: 1,
     alignItems: 'center',
-    borderRadius: 14,
-    paddingVertical: 10,
+    borderRadius: 16,
+    paddingVertical: 12,
     paddingHorizontal: 4,
+    borderWidth: 1,
   },
   navBtn: {},
   actionIcon: { fontSize: 22, marginBottom: 4 },
@@ -756,19 +867,128 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
     borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
-    gap: 8,
+    gap: 12,
   },
-  cardIcon: { fontSize: 18 },
-  cardTitle: { fontSize: 14, fontFamily: 'Syne-Bold', flex: 1 },
+  cardIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontFamily: 'Syne-Bold',
+    letterSpacing: -0.2,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusPillText: {
+    fontSize: 11.5,
+    fontFamily: 'Syne-Bold',
+  },
+
+  // Hours
+  hoursTogglePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  hoursToggleText: {
+    fontSize: 12.5,
+    fontFamily: 'Syne-Bold',
+  },
+  scheduleContainer: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 4,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  scheduleRowToday: {
+    borderRadius: 8,
+  },
+  scheduleDay: {
+    fontSize: 13,
+    fontFamily: 'Syne-Bold',
+  },
+  scheduleTime: {
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+  },
+
+  // Transit
+  transitList: {
+    marginTop: 12,
+  },
+  transitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+  },
+  transitItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  transitIconMini: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  transitName: {
+    fontSize: 13.5,
+    fontFamily: 'Syne-Bold',
+    flex: 1,
+  },
+  transitDistBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  transitDist: {
+    fontSize: 12,
+    fontFamily: 'Syne-Bold',
+    fontVariant: ['tabular-nums'],
+  },
 
   // Status badge
   statusBadge: {
