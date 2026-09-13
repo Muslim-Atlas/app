@@ -44,8 +44,8 @@ const releaseVersion = versionIndex !== -1 ? args[versionIndex + 1] : '1.1.0';
 
 const AUDIENCE_ID = process.env.RESEND_AUDIENCE_ID || '164f141d-a403-4ab5-ab92-1f32e58d7777';
 const FROM_EMAIL = 'Muslim Atlas <noreply@notifications.yqwebstudio.com>';
-const GITHUB_DOWNLOAD_URL = `https://github.com/YusufQuresh1/Muslim-Atlas/releases/download/v${releaseVersion}/MuslimAtlas-v${releaseVersion}.apk`;
-const GITHUB_RELEASE_URL = `https://github.com/YusufQuresh1/Muslim-Atlas/releases/tag/v${releaseVersion}`;
+const GITHUB_DOWNLOAD_URL = `https://github.com/Muslim-Atlas/app/releases/download/v${releaseVersion}/MuslimAtlas-v${releaseVersion}.apk`;
+const GITHUB_RELEASE_URL = `https://github.com/Muslim-Atlas/app/releases/tag/v${releaseVersion}`;
 
 function generateEmailHtml(version, recipientEmail = '') {
   return `
