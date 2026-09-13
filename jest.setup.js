@@ -89,6 +89,7 @@ jest.mock('react-native-android-widget', () => ({
   requestWidgetUpdate: jest.fn(),
   FlexWidget: 'FlexWidget',
   TextWidget: 'TextWidget',
+  SvgWidget: 'SvgWidget',
 }));
 
 // Mock react-native-safe-area-context
