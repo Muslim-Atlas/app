@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl, Alert, Platform, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { MosqueContext } from '../context/MosqueContext';
@@ -8,14 +8,18 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { calculatePrayerTimes } from '../utils/prayerEngine';
 import { usePrayerSettings } from '../context/PrayerSettingsContext';
-import { WidgetPreview } from 'react-native-android-widget';
-import { PrayerWidget } from '../widgets/PrayerWidget';
 import { updateAppWidgets } from '../../widget-task-handler';
+import {
+  requestNotificationPermissions,
+  scheduleAllPrayerNotifications,
+  cancelAllPrayerNotifications,
+} from '../utils/notificationService';
+import { registerBackgroundNotificationTask } from '../utils/backgroundNotificationTask';
 
 export default function HomeScreen({ navigation }) {
   const { userLocation, searchLocationName, isRefreshing, forceRefreshData } = React.useContext(MosqueContext);
   const { theme } = useTheme();
-  const { asrMethod, prayerOffsets, calculationMethod, highLatitudeRule } = usePrayerSettings();
+  const { asrMethod, prayerOffsets, calculationMethod, highLatitudeRule, notificationSettings } = usePrayerSettings();
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
@@ -35,21 +39,29 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   const handleRefresh = async () => {
-    if (location) {
-      await fetchPrayerTimes(location.coords.latitude, location.coords.longitude);
+    const activeCoords = userLocation?.coords || location?.coords;
+    if (activeCoords) {
+      await fetchPrayerTimes(activeCoords.latitude, activeCoords.longitude);
     }
     await forceRefreshData();
   };
 
-  const hasFetchedPrayerTimesRef = useRef(false);
+  const lastPrayerFetchedCoords = useRef(null);
 
   useEffect(() => {
-    if (!userLocation || hasFetchedPrayerTimesRef.current) return;
-    hasFetchedPrayerTimesRef.current = true;
-    const lat = userLocation.coords.latitude;
-    const lng = userLocation.coords.longitude;
-    fetchPrayerTimes(lat, lng);
-  }, [userLocation]);
+    const active = userLocation || location;
+    if (!active?.coords) return;
+    const lat = active.coords.latitude;
+    const lng = active.coords.longitude;
+
+    const prev = lastPrayerFetchedCoords.current;
+    const isNewLocation = !prev || Math.abs(prev.lat - lat) > 0.01 || Math.abs(prev.lng - lng) > 0.01;
+
+    if (isNewLocation) {
+      lastPrayerFetchedCoords.current = { lat, lng };
+      fetchPrayerTimes(lat, lng);
+    }
+  }, [userLocation, location]);
 
   useEffect(() => {
     (async () => {
@@ -65,16 +77,10 @@ export default function HomeScreen({ navigation }) {
         ]);
         const loc = lastKnown ?? await Promise.race([
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null),
-          new Promise(resolve => setTimeout(() => resolve(null), 12000)),
+          new Promise(resolve => setTimeout(() => resolve(null), 10000)),
         ]);
         if (loc) {
           setLocation(loc);
-          if (!hasFetchedPrayerTimesRef.current) {
-            hasFetchedPrayerTimesRef.current = true;
-            const lat = loc.coords.latitude;
-            const lng = loc.coords.longitude;
-            await fetchPrayerTimes(lat, lng);
-          }
         }
       } catch (err) {
         console.error(err);
@@ -102,6 +108,67 @@ export default function HomeScreen({ navigation }) {
       updateAppWidgets().catch(console.error);
     }
   }, [location, userLocation, asrMethod, prayerOffsets, calculationMethod, highLatitudeRule, timezone, currentTime.getDate()]);
+
+  // ---------------------------------------------------------------------------
+  // Prayer notifications: request permission once + reschedule on any change
+  // ---------------------------------------------------------------------------
+
+  // Request permission when notifications are first enabled
+  useEffect(() => {
+    if (notificationSettings?.enabled) {
+      requestNotificationPermissions();
+    }
+  }, [notificationSettings?.enabled]);
+
+  // Register the headless background task once on mount.
+  // stopOnTerminate: false + startOnBoot: true means the OS will:
+  //  - Keep running the task even after the app is force-killed
+  //  - Re-run the task automatically after a device reboot
+  // This is what ensures notifications survive without the app being open.
+  useEffect(() => {
+    registerBackgroundNotificationTask();
+  }, []);
+
+  // Reschedule whenever location, prayer settings, or notification settings change.
+  // This covers: toggling a prayer on/off, changing pre-reminder minutes,
+  // changing calculation method / offsets, or moving to a new location.
+  useEffect(() => {
+    const coords = location?.coords || userLocation?.coords;
+    if (!coords) return;
+
+    const prayerSettings = { asrMethod, prayerOffsets, calculationMethod, highLatitudeRule, timeZone: timezone };
+
+    if (!notificationSettings?.enabled) {
+      // If notifications turned off, cancel everything immediately
+      cancelAllPrayerNotifications();
+      return;
+    }
+
+    scheduleAllPrayerNotifications(coords, prayerSettings, notificationSettings);
+  }, [
+    location,
+    userLocation,
+    notificationSettings,
+    asrMethod,
+    prayerOffsets,
+    calculationMethod,
+    highLatitudeRule,
+    timezone,
+  ]);
+
+  // Re-schedule when app returns to foreground (covers overnight date change &
+  // ensures the 7-day window stays topped up)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        const coords = location?.coords || userLocation?.coords;
+        if (!coords || !notificationSettings?.enabled) return;
+        const prayerSettings = { asrMethod, prayerOffsets, calculationMethod, highLatitudeRule, timeZone: timezone };
+        scheduleAllPrayerNotifications(coords, prayerSettings, notificationSettings);
+      }
+    });
+    return () => subscription.remove();
+  }, [location, userLocation, notificationSettings, asrMethod, prayerOffsets, calculationMethod, highLatitudeRule, timezone]);
 
   const fetchPrayerTimes = async (lat, lng) => {
     const controller = new AbortController();
@@ -145,8 +212,13 @@ export default function HomeScreen({ navigation }) {
   const renderPrayerCard = () => {
     if (!prayerTimes) return null;
 
-    const activeSunrise = apiTimings?.Sunrise ? apiTimings.Sunrise.split(' ')[0] : prayerTimes.Sunrise.split(' ')[0];
-    const activeMaghrib = apiTimings?.Maghrib ? apiTimings.Maghrib.split(' ')[0] : prayerTimes.Maghrib.split(' ')[0];
+    // In 'LondonUnifiedDefault' mode use Google API Sunrise/Maghrib; otherwise use pure adhan values
+    const activeSunrise = (calculationMethod === 'LondonUnifiedDefault' && apiTimings?.Sunrise)
+      ? apiTimings.Sunrise.split(' ')[0]
+      : prayerTimes.Sunrise.split(' ')[0];
+    const activeMaghrib = (calculationMethod === 'LondonUnifiedDefault' && apiTimings?.Maghrib)
+      ? apiTimings.Maghrib.split(' ')[0]
+      : prayerTimes.Maghrib.split(' ')[0];
 
     const prayers = [
       { name: 'Fajr', time: prayerTimes.Fajr },
@@ -173,8 +245,7 @@ export default function HomeScreen({ navigation }) {
     const ishaMs = getMs(prayerTimes.Isha);
 
     let activeIndex = -1;
-    if (currentMs >= fajrMs && currentMs < sunriseMs) activeIndex = 0;
-    else if (currentMs >= sunriseMs && currentMs < dhuhrMs) activeIndex = 1; // Sunrise -> Dhuhr highlights Dhuhr next
+    if (currentMs >= fajrMs && currentMs < dhuhrMs) activeIndex = 0;
     else if (currentMs >= dhuhrMs && currentMs < asrMs) activeIndex = 1;
     else if (currentMs >= asrMs && currentMs < maghribMs) activeIndex = 2;
     else if (currentMs >= maghribMs && currentMs < ishaMs) activeIndex = 3;
@@ -231,13 +302,8 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
-  const renderWidgetPreview = React.useCallback(() => {
+  const renderCountdownCard = () => {
     if (!prayerTimes) return null;
-
-    const overriddenTimes = {
-      ...prayerTimes,
-      ...(apiTimings ? { Sunrise: apiTimings.Sunrise, Maghrib: apiTimings.Maghrib } : {})
-    };
 
     const getMs = (timeString) => {
       if (!timeString) return 0;
@@ -247,34 +313,151 @@ export default function HomeScreen({ navigation }) {
       return (isNaN(h) || isNaN(m)) ? 0 : h * 60 + m;
     };
 
+    const activeMaghrib = (calculationMethod === 'LondonUnifiedDefault' && apiTimings?.Maghrib)
+      ? apiTimings.Maghrib.split(' ')[0]
+      : prayerTimes.Maghrib.split(' ')[0];
+    
     const currentMs = currentTime.getHours() * 60 + currentTime.getMinutes();
-    const widgetPrayers = [
-      { name: 'Fajr', ms: getMs(overriddenTimes.Fajr) },
-      { name: 'Sunrise', ms: getMs(overriddenTimes.Sunrise) },
-      { name: 'Dhuhr', ms: getMs(overriddenTimes.Dhuhr) },
-      { name: 'Asr', ms: getMs(overriddenTimes.Asr) },
-      { name: 'Maghrib', ms: getMs(overriddenTimes.Maghrib) },
-      { name: 'Isha', ms: getMs(overriddenTimes.Isha) },
-    ];
+    const fajrMs = getMs(prayerTimes.Fajr);
+    const dhuhrMs = getMs(prayerTimes.Dhuhr);
+    const asrMs = getMs(prayerTimes.Asr);
+    const maghribMs = getMs(activeMaghrib);
+    const ishaMs = getMs(prayerTimes.Isha);
 
-    const nextWidgetPrayer = widgetPrayers.find(p => p.ms > currentMs);
-    const nextWidgetPrayerName = nextWidgetPrayer ? nextWidgetPrayer.name : 'Fajr';
+    let nextName = '';
+    let nextMs = 0;
+    let isTomorrow = false;
 
-    let currentWidgetPrayer = [...widgetPrayers].reverse().find(p => currentMs >= p.ms);
-    if (!currentWidgetPrayer) {
-      currentWidgetPrayer = widgetPrayers[widgetPrayers.length - 1]; // Isha if before Fajr
+    if (currentMs < fajrMs) {
+      nextName = 'Fajr';
+      nextMs = fajrMs;
+    } else if (currentMs < dhuhrMs) {
+      nextName = 'Dhuhr';
+      nextMs = dhuhrMs;
+    } else if (currentMs < asrMs) {
+      nextName = 'Asr';
+      nextMs = asrMs;
+    } else if (currentMs < maghribMs) {
+      nextName = 'Maghrib';
+      nextMs = maghribMs;
+    } else if (currentMs < ishaMs) {
+      nextName = 'Isha';
+      nextMs = ishaMs;
+    } else {
+      nextName = 'Fajr';
+      nextMs = fajrMs;
+      isTomorrow = true;
     }
-    const currentWidgetPrayerName = currentWidgetPrayer.name;
+
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(Math.floor(nextMs / 60));
+    target.setMinutes(nextMs % 60);
+    target.setSeconds(0);
+    target.setMilliseconds(0);
+    if (isTomorrow) {
+      target.setDate(target.getDate() + 1);
+    }
+
+    const diffMs = target.getTime() - now.getTime();
+    if (diffMs <= 0) return null;
+
+    const diffSecs = Math.floor(diffMs / 1000);
+    const h = Math.floor(diffSecs / 3600);
+    const m = Math.floor((diffSecs % 3600) / 60);
+    const s = diffSecs % 60;
+
+    const pad = (num) => String(num).padStart(2, '0');
+
+    const getInterpolatedColors = (s) => {
+      const GreenStart = [5, 150, 105];
+      const GreenEnd = [4, 120, 87];
+      const YellowStart = [217, 119, 6];
+      const YellowEnd = [180, 83, 9];
+      const RedStart = [220, 38, 38];
+      const RedEnd = [153, 27, 27];
+      
+      const interpolate = (c1, c2, p) => [
+        Math.round(c1[0] * (1 - p) + c2[0] * p),
+        Math.round(c1[1] * (1 - p) + c2[1] * p),
+        Math.round(c1[2] * (1 - p) + c2[2] * p)
+      ];
+      
+      let startRgb, endRgb;
+      if (s >= 4500) {
+        startRgb = GreenStart;
+        endRgb = GreenEnd;
+      } else if (s > 3600) {
+        const p = (s - 3600) / 900;
+        startRgb = interpolate(YellowStart, GreenStart, p);
+        endRgb = interpolate(YellowEnd, GreenEnd, p);
+      } else if (s > 2700) {
+        startRgb = YellowStart;
+        endRgb = YellowEnd;
+      } else if (s > 1800) {
+        const p = (s - 1800) / 900;
+        startRgb = interpolate(RedStart, YellowStart, p);
+        endRgb = interpolate(RedEnd, YellowEnd, p);
+      } else {
+        startRgb = RedStart;
+        endRgb = RedEnd;
+      }
+      return [
+        `rgb(${startRgb[0]}, ${startRgb[1]}, ${startRgb[2]})`,
+        `rgb(${endRgb[0]}, ${endRgb[1]}, ${endRgb[2]})`
+      ];
+    };
+
+    const gradientColors = getInterpolatedColors(diffSecs);
 
     return (
-      <PrayerWidget
-        prayerTimes={overriddenTimes}
-        nextPrayerName={nextWidgetPrayerName}
-        currentPrayerName={currentWidgetPrayerName}
-        locationName={searchLocationName || 'Muslim Atlas'}
-      />
+      <LinearGradient 
+        colors={gradientColors} 
+        start={{ x: 0, y: 0 }} 
+        end={{ x: 1, y: 1 }} 
+        style={styles.countdownCard}
+      >
+        <LinearGradient 
+          colors={['rgba(15, 23, 42, 0.75)', 'rgba(15, 23, 42, 0.15)']} 
+          start={{ x: 0, y: 0 }} 
+          end={{ x: 1, y: 0 }} 
+          style={StyleSheet.absoluteFill} 
+        />
+        <View style={styles.countdownRow}>
+          <View style={styles.countdownTextCol}>
+            <Text style={[styles.countdownNextName, { color: '#ffffff' }]}>
+              {nextName} <Text style={[styles.countdownStartsIn, { color: 'rgba(255, 255, 255, 0.7)' }]}>starts in</Text>
+            </Text>
+          </View>
+          
+          <View style={styles.countdownGrid}>
+            <View style={styles.countdownBox}>
+              <View style={[styles.digitBg, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
+                <Text style={[styles.digitText, { color: '#ffffff' }]}>{pad(h)}</Text>
+              </View>
+              <Text style={[styles.countdownLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>HOURS</Text>
+            </View>
+            
+            <View style={styles.countdownBox}>
+              <View style={[styles.digitBg, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
+                <Text style={[styles.digitText, { color: '#ffffff' }]}>{pad(m)}</Text>
+              </View>
+              <Text style={[styles.countdownLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>MINS</Text>
+            </View>
+            
+            <View style={styles.countdownBox}>
+              <View style={[styles.digitBg, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}>
+                <Text style={[styles.digitText, { color: '#ffffff' }]}>{pad(s)}</Text>
+              </View>
+              <Text style={[styles.countdownLabel, { color: 'rgba(255, 255, 255, 0.7)' }]}>SECS</Text>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
     );
-  }, [prayerTimes, apiTimings, searchLocationName, currentTime.getHours(), currentTime.getMinutes()]);
+  };
+
+
 
   if (loading) {
     return (
@@ -335,7 +518,13 @@ export default function HomeScreen({ navigation }) {
           <Text style={[styles.headerTitle, { color: theme.text }]}>Home</Text>
         </View>
 
-        {renderPrayerCard()}
+        {prayerTimes && (
+          <View style={styles.prayerTimesContainer}>
+            {renderPrayerCard()}
+            <View style={{ height: 1, backgroundColor: 'rgba(255, 255, 255, 0.12)' }} />
+            {renderCountdownCard()}
+          </View>
+        )}
 
         <View style={styles.utilityGrid}>
           {utilities.map(u => (
@@ -445,18 +634,7 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {prayerTimes && (
-          <View style={{ paddingHorizontal: 20, marginBottom: 20, alignItems: 'center' }}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.text, marginBottom: 12, alignSelf: 'flex-start' }}>
-              Widget Preview (4x2)
-            </Text>
-            <WidgetPreview
-              renderWidget={renderWidgetPreview}
-              width={320}
-              height={140}
-            />
-          </View>
-        )}
+
         
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -467,18 +645,17 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 16, fontWeight: '600' },
-  errorText: { fontSize: 16, fontWeight: '600', textAlign: 'center', padding: 20 },
+  loadingText: { marginTop: 12, fontSize: 16, fontFamily: 'Syne-Bold' },
+  errorText: { fontSize: 16, fontFamily: 'Syne-Bold', textAlign: 'center', padding: 20 },
   scrollContent: { paddingBottom: 20 },
   header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16 },
-  headerTitle: { fontSize: 32, fontWeight: '800' },
+  headerTitle: { fontSize: 32, fontFamily: 'Unbounded-Bold' },
   
-  prayerCard: {
+  prayerTimesContainer: {
     marginHorizontal: 20,
     borderRadius: 24,
-    padding: 24,
+    overflow: 'hidden',
     marginBottom: 24,
-    minHeight: 120, // Safety
     ...Platform.select({
       ios: {
         shadowColor: '#0369a1',
@@ -491,15 +668,19 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  prayerCard: {
+    padding: 24,
+    minHeight: 120, // Safety
+  },
   prayerCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   prayerCardMeta: { flex: 1, paddingRight: 10 },
-  prayerCardTitle: { fontSize: 22, fontWeight: '800', color: '#fff', marginBottom: 4 },
-  prayerCardLocation: { fontSize: 13, color: '#D1FAE5', fontWeight: '700', marginBottom: 6 },
-  prayerCardDate: { fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500', lineHeight: 20 },
+  prayerCardTitle: { fontSize: 22, fontFamily: 'Unbounded-Bold', color: '#fff', marginBottom: 4 },
+  prayerCardLocation: { fontSize: 13, color: '#D1FAE5', fontFamily: 'Syne-Bold', marginBottom: 6 },
+  prayerCardDate: { fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 20 },
   prayerCardClockMeta: { alignItems: 'flex-end', justifyContent: 'center' },
   prayerCardClock: {
     fontSize: 32,
-    fontWeight: '800',
+    fontFamily: 'Unbounded-Bold',
     color: '#fff',
     marginBottom: 8,
     fontVariant: ['tabular-nums'],
@@ -510,15 +691,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 12,
   },
-  sunriseText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  sunriseText: { fontSize: 12, fontWeight: 'bold', color: '#fff' },
   prayerCardDivider: { height: 1, marginVertical: 12 },
   prayerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   prayerItem: { alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6, borderRadius: 16, flex: 1 },
   prayerItemActive: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 16, overflow: 'hidden' },
-  prayerName: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 4, fontWeight: '700' },
+  prayerName: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 4, fontFamily: 'Syne-Bold' },
   prayerNameActive: { color: '#fff' },
-  prayerTime: { fontSize: 15, fontWeight: '700', color: 'rgba(255,255,255,0.9)' },
-  prayerTimeActive: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  prayerTime: { fontSize: 15, fontWeight: 'bold', color: 'rgba(255,255,255,0.9)', fontVariant: ['tabular-nums'] },
+  prayerTimeActive: { color: '#fff', fontSize: 16, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
   
   primaryStack: {
     paddingHorizontal: 20,
@@ -559,13 +740,13 @@ const styles = StyleSheet.create({
   },
   primaryTitle: {
     fontSize: 22,
-    fontWeight: '800',
+    fontFamily: 'Unbounded-Bold',
     color: '#FFFFFF',
     marginBottom: 2,
   },
   primarySubtitle: {
     fontSize: 14,
-    fontWeight: '500',
+    lineHeight: 20,
     color: 'rgba(255,255,255,0.8)',
   },
   utilityGrid: {
@@ -593,7 +774,58 @@ const styles = StyleSheet.create({
   },
   utilityTitle: {
     fontSize: 11,
-    fontWeight: '700',
+    fontFamily: 'Syne-Bold',
     textAlign: 'center',
+  },
+  countdownCard: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  countdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  countdownTextCol: {
+    flexShrink: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  countdownNextName: {
+    fontSize: 24,
+    fontFamily: 'Unbounded-Bold',
+    letterSpacing: -0.5,
+  },
+  countdownStartsIn: {
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  countdownGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  countdownBox: {
+    alignItems: 'center',
+    width: 52,
+  },
+  digitBg: {
+    width: '100%',
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  digitText: {
+    fontSize: 18,
+    fontFamily: 'Unbounded-Bold',
+    fontVariant: ['tabular-nums'],
+  },
+  countdownLabel: {
+    fontSize: 8,
+    fontFamily: 'Syne-Bold',
+    letterSpacing: 0.5,
   },
 });
