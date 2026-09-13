@@ -63,8 +63,8 @@ const MainNavigator = () => {
                 iconName = focused ? 'home' : 'home-outline';
               } else if (route.name === 'Map') {
                 iconName = focused ? 'map' : 'map-outline';
-              } else if (route.name === 'Profile') {
-                iconName = focused ? 'person' : 'person-outline';
+              } else if (route.name === 'Settings' || route.name === 'Profile') {
+                iconName = focused ? 'settings' : 'settings-outline';
               }
               return <Ionicons name={iconName} size={size} color={color} />;
             },
@@ -74,7 +74,7 @@ const MainNavigator = () => {
         >
           <Tab.Screen name="Home" component={HomeScreen} />
           <Tab.Screen name="Map" component={MapScreen} />
-          <Tab.Screen name="Profile" component={SettingsScreen} />
+          <Tab.Screen name="Settings" component={SettingsScreen} />
         </Tab.Navigator>
       </NavigationContainer>
       <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
