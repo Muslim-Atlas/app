@@ -4,7 +4,7 @@ export default {
   expo: {
     name: 'Muslim Atlas',
     slug: 'muslim-atlas',
-    version: '1.0.0',
+    version: '1.1.0',
     extra: {
       eas: {
         projectId: '20433b8b-bf61-4ff8-8c7d-e63727a570b5',
@@ -23,6 +23,7 @@ export default {
       supportsTablet: true,
     },
     android: {
+      versionCode: 2,
       adaptiveIcon: {
         foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: '#a5d6a7',
@@ -50,7 +51,7 @@ export default {
       [
         'expo-notifications',
         {
-          icon: './assets/icon.png',
+          icon: './assets/notification-icon.png',
           color: '#1a7f4b',
           defaultChannel: 'prayer-times',
           // Ensures Android uses setExactAndAllowWhileIdle for precise delivery

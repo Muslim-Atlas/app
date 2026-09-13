@@ -6,7 +6,7 @@ import { MosqueContext } from '../context/MosqueContext';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { calculatePrayerTimes } from '../utils/prayerEngine';
+import { calculatePrayerTimes, adjustTimeString } from '../utils/prayerEngine';
 import { usePrayerSettings } from '../context/PrayerSettingsContext';
 import { updateAppWidgets } from '../../widget-task-handler';
 import {
@@ -103,11 +103,12 @@ export default function HomeScreen({ navigation }) {
         calculationMethod,
         highLatitudeRule,
         timeZone: timezone,
+        apiTimings,
       });
       setPrayerTimes(times);
       updateAppWidgets().catch(console.error);
     }
-  }, [location, userLocation, asrMethod, prayerOffsets, calculationMethod, highLatitudeRule, timezone, currentTime.getDate()]);
+  }, [location, userLocation, asrMethod, prayerOffsets, calculationMethod, highLatitudeRule, timezone, apiTimings, currentTime.getDate()]);
 
   // ---------------------------------------------------------------------------
   // Prayer notifications: request permission once + reschedule on any change
@@ -173,6 +174,7 @@ export default function HomeScreen({ navigation }) {
   const fetchPrayerTimes = async (lat, lng) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
+    let data = null;
     try {
       const today = new Date();
       const day = String(today.getDate()).padStart(2, '0');
@@ -184,7 +186,7 @@ export default function HomeScreen({ navigation }) {
         `https://api.aladhan.com/v1/timings/${dateStr}?latitude=${lat}&longitude=${lng}&method=2`,
         { signal: controller.signal }
       );
-      const data = await res.json();
+      data = await res.json();
       if (data && data.data) {
         if (data.data.date) setPrayerDate(data.data.date);
         if (data.data.timings) setApiTimings(data.data.timings);
@@ -204,6 +206,7 @@ export default function HomeScreen({ navigation }) {
         calculationMethod,
         highLatitudeRule,
         timeZone: timezone,
+        apiTimings: (data?.data?.timings) || apiTimings,
       });
       setPrayerTimes(times);
     }
@@ -212,13 +215,13 @@ export default function HomeScreen({ navigation }) {
   const renderPrayerCard = () => {
     if (!prayerTimes) return null;
 
-    // In 'LondonUnifiedDefault' mode use Google API Sunrise/Maghrib; otherwise use pure adhan values
+    // In 'LondonUnifiedDefault' mode use Google API Sunrise/Maghrib WITH user manual corrections; otherwise use pure adhan values
     const activeSunrise = (calculationMethod === 'LondonUnifiedDefault' && apiTimings?.Sunrise)
-      ? apiTimings.Sunrise.split(' ')[0]
-      : prayerTimes.Sunrise.split(' ')[0];
+      ? adjustTimeString(apiTimings.Sunrise, prayerOffsets?.Sunrise || 0)
+      : (prayerTimes.Sunrise ? prayerTimes.Sunrise.split(' ')[0] : '--:--');
     const activeMaghrib = (calculationMethod === 'LondonUnifiedDefault' && apiTimings?.Maghrib)
-      ? apiTimings.Maghrib.split(' ')[0]
-      : prayerTimes.Maghrib.split(' ')[0];
+      ? adjustTimeString(apiTimings.Maghrib, prayerOffsets?.Maghrib || 0)
+      : (prayerTimes.Maghrib ? prayerTimes.Maghrib.split(' ')[0] : '--:--');
 
     const prayers = [
       { name: 'Fajr', time: prayerTimes.Fajr },
@@ -238,10 +241,10 @@ export default function HomeScreen({ navigation }) {
     };
 
     const fajrMs = getMs(prayerTimes.Fajr);
-    const sunriseMs = getMs(prayerTimes.Sunrise);
+    const sunriseMs = getMs(activeSunrise);
     const dhuhrMs = getMs(prayerTimes.Dhuhr);
     const asrMs = getMs(prayerTimes.Asr);
-    const maghribMs = getMs(prayerTimes.Maghrib);
+    const maghribMs = getMs(activeMaghrib);
     const ishaMs = getMs(prayerTimes.Isha);
 
     let activeIndex = -1;
@@ -326,8 +329,8 @@ export default function HomeScreen({ navigation }) {
     };
 
     const activeMaghrib = (calculationMethod === 'LondonUnifiedDefault' && apiTimings?.Maghrib)
-      ? apiTimings.Maghrib.split(' ')[0]
-      : prayerTimes.Maghrib.split(' ')[0];
+      ? adjustTimeString(apiTimings.Maghrib, prayerOffsets?.Maghrib || 0)
+      : (prayerTimes.Maghrib ? prayerTimes.Maghrib.split(' ')[0] : '--:--');
     
     const currentMs = currentTime.getHours() * 60 + currentTime.getMinutes();
     const fajrMs = getMs(prayerTimes.Fajr);
@@ -527,7 +530,7 @@ export default function HomeScreen({ navigation }) {
         }
       >
         <View style={styles.header}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Home</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Muslim Atlas</Text>
         </View>
 
         {prayerTimes && (
@@ -660,8 +663,8 @@ const styles = StyleSheet.create({
   loadingText: { marginTop: 12, fontSize: 16, fontFamily: 'Syne-Bold' },
   errorText: { fontSize: 16, fontFamily: 'Syne-Bold', textAlign: 'center', padding: 20 },
   scrollContent: { paddingBottom: 20 },
-  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16 },
-  headerTitle: { fontSize: 32, fontFamily: 'Unbounded-Bold' },
+  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 26, fontFamily: 'Unbounded-Bold', textAlign: 'center' },
   
   prayerTimesContainer: {
     marginHorizontal: 20,

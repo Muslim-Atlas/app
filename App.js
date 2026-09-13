@@ -19,6 +19,11 @@ import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { PreferencesProvider } from './src/context/PreferencesContext';
 import { PrayerSettingsProvider } from './src/context/PrayerSettingsContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ChangelogModal from './src/components/ChangelogModal';
+import UpdateAvailableModal from './src/components/UpdateAvailableModal';
+import { checkAndNotifyUpdate, CURRENT_APP_VERSION, STORAGE_KEYS } from './src/utils/updateChecker';
+import { ensureNotificationChannels } from './src/utils/notificationService';
 import Mapbox from '@rnmapbox/maps';
 
 Mapbox.setAccessToken(process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN);
@@ -28,6 +33,42 @@ const Tab = createBottomTabNavigator();
 
 const MainNavigator = () => {
   const { theme } = useTheme();
+  const [showLaunchChangelog, setShowLaunchChangelog] = React.useState(false);
+  const [appUpdateInfo, setAppUpdateInfo] = React.useState(null);
+
+  React.useEffect(() => {
+    // 0. Ensure Android notification channels are registered immediately
+    ensureNotificationChannels().catch(console.warn);
+
+    // 1. Check if user hasn't seen changelog for current version
+    AsyncStorage.getItem(STORAGE_KEYS.LAST_SEEN_CHANGELOG_VERSION).then((lastSeen) => {
+      if (lastSeen !== CURRENT_APP_VERSION) {
+        setShowLaunchChangelog(true);
+      }
+    }).catch(console.warn);
+
+    // 2. Perform background update check after 3 seconds
+    const timer = setTimeout(() => {
+      checkAndNotifyUpdate(CURRENT_APP_VERSION)
+        .then((info) => {
+          if (info?.updateAvailable) {
+            setAppUpdateInfo(info);
+          }
+        })
+        .catch(console.warn);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleDismissChangelog = async () => {
+    setShowLaunchChangelog(false);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.LAST_SEEN_CHANGELOG_VERSION, CURRENT_APP_VERSION);
+    } catch (e) {
+      console.warn('Failed to save last seen changelog version:', e);
+    }
+  };
   
   const navTheme = {
     dark: theme.mode === 'dark',
@@ -77,6 +118,18 @@ const MainNavigator = () => {
           <Tab.Screen name="Settings" component={SettingsScreen} />
         </Tab.Navigator>
       </NavigationContainer>
+      
+      <ChangelogModal
+        visible={showLaunchChangelog}
+        onClose={handleDismissChangelog}
+      />
+
+      <UpdateAvailableModal
+        visible={!!appUpdateInfo}
+        updateInfo={appUpdateInfo}
+        onClose={() => setAppUpdateInfo(null)}
+      />
+
       <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
     </View>
   );

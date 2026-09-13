@@ -18,6 +18,10 @@ import { useTheme } from '../context/ThemeContext';
 import { usePrayerSettings } from '../context/PrayerSettingsContext';
 import { usePreferences } from '../context/PreferencesContext';
 import LoginModal from './LoginModal';
+import ChangelogModal from './ChangelogModal';
+import UpdateAvailableModal from './UpdateAvailableModal';
+import { checkForAppUpdate, CURRENT_APP_VERSION } from '../utils/updateChecker';
+import { requestNotificationPermissions } from '../utils/notificationService';
 
 const SUPPORT_URL = 'https://buymeacoffee.com/muslimatlas';
 
@@ -190,6 +194,30 @@ export default function SettingsScreen() {
   const [ruleExpanded, setRuleExpanded] = useState(false);
   const [offsetsExpanded, setOffsetsExpanded] = useState(false);
   const [reminderPickerPrayer, setReminderPickerPrayer] = useState(null);
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
+  const handleCheckUpdate = async () => {
+    if (isCheckingUpdate) return;
+    setIsCheckingUpdate(true);
+    try {
+      const res = await checkForAppUpdate();
+      if (res.updateAvailable) {
+        setUpdateInfo(res);
+      } else {
+        Alert.alert(
+          'Up to Date',
+          `You are on the latest version of Muslim Atlas (v${CURRENT_APP_VERSION}).`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (e) {
+      Alert.alert('Update Check Failed', 'Unable to reach the update server. Please check your internet connection.');
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
 
   const handleSupport = async () => {
     try {
@@ -512,7 +540,20 @@ export default function SettingsScreen() {
               rightElement={
                 <Switch
                   value={notificationSettings.enabled}
-                  onValueChange={(val) => setNotificationsEnabled(val)}
+                  onValueChange={async (val) => {
+                    if (val) {
+                      const granted = await requestNotificationPermissions();
+                      if (!granted) {
+                        Alert.alert(
+                          'Permission Required',
+                          'Please allow notifications in your device settings to receive prayer time reminders.',
+                          [{ text: 'OK' }]
+                        );
+                        return;
+                      }
+                    }
+                    setNotificationsEnabled(val);
+                  }}
                   trackColor={{ false: '#767577', true: theme.primary }}
                   thumbColor="#FFFFFF"
                 />
@@ -628,10 +669,32 @@ export default function SettingsScreen() {
             />
           </SettingsSection>
 
-          {/* ── 6. Version Footer ─────────────────────────────────────────── */}
+          {/* ── 6. Updates & About Section ─────────────────────────────────── */}
+          <SettingsSection title="Updates & About">
+            <SettingsRow
+              icon="sparkles"
+              iconBg="#10B981"
+              title="What's New in v1.1.0"
+              subtitle="View release highlights & changelog"
+              showChevron
+              onPress={() => setShowChangelog(true)}
+              isLast={false}
+            />
+            <SettingsRow
+              icon="cloud-download"
+              iconBg="#3B82F6"
+              title="Check for Updates"
+              subtitle={isCheckingUpdate ? 'Checking GitHub releases...' : 'Check for newer releases'}
+              showChevron
+              onPress={handleCheckUpdate}
+              isLast={true}
+            />
+          </SettingsSection>
+
+          {/* ── 7. Version Footer ─────────────────────────────────────────── */}
           <View style={styles.footerContainer}>
             <Text style={[styles.versionText, { color: theme.subText }]}>
-              Muslim Atlas 1.0.0
+              Muslim Atlas 1.1.0
             </Text>
           </View>
         </ScrollView>
@@ -640,6 +703,17 @@ export default function SettingsScreen() {
       <LoginModal
         visible={showLoginModal}
         onClose={() => setShowLoginModal(false)}
+      />
+
+      <ChangelogModal
+        visible={showChangelog}
+        onClose={() => setShowChangelog(false)}
+      />
+
+      <UpdateAvailableModal
+        visible={!!updateInfo}
+        updateInfo={updateInfo}
+        onClose={() => setUpdateInfo(null)}
       />
 
       {/* Pre-Reminder Number Selector Modal */}

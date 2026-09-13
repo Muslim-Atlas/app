@@ -1,7 +1,7 @@
 import React from 'react';
 import { requestWidgetUpdate } from 'react-native-android-widget';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { calculatePrayerTimes } from './src/utils/prayerEngine';
+import { calculatePrayerTimes, adjustTimeString } from './src/utils/prayerEngine';
 import { PrayerWidget } from './src/widgets/PrayerWidget';
 
 const ASR_METHOD_KEY = '@muslimatlas_asr_method';
@@ -88,13 +88,13 @@ async function resolveTimesForWidget(lat, lng, options) {
       const data = await res.json();
       if (data?.data?.timings) {
         const apiTimings = data.data.timings;
-        // Override Sunrise — strip any trailing " (BST)" etc from API value
+        // Override Sunrise with Google/aladhan value + user's manual correction
         if (apiTimings.Sunrise) {
-          times.Sunrise = apiTimings.Sunrise.split(' ')[0];
+          times.Sunrise = adjustTimeString(apiTimings.Sunrise, prayerOffsets?.Sunrise || 0);
         }
-        // Override Maghrib — Google sunset time
+        // Override Maghrib with Google sunset time + user's manual correction
         if (apiTimings.Maghrib) {
-          times.Maghrib = apiTimings.Maghrib.split(' ')[0];
+          times.Maghrib = adjustTimeString(apiTimings.Maghrib, prayerOffsets?.Maghrib || 0);
         }
       }
     } catch (e) {

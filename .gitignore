@@ -67,4 +67,5 @@ reactlogs.txt
 
 # Temporary refactor scripts
 tmp_*.js
+scripts/*.html
 

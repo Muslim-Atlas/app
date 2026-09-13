@@ -8,6 +8,8 @@ import { calculatePrayerTimes } from './prayerEngine';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -17,11 +19,11 @@ Notifications.setNotificationHandler({
 // Prayer metadata
 // ---------------------------------------------------------------------------
 const PRAYER_META = {
-  Fajr:    { emoji: '🌅', subtitle: 'Dawn prayer' },
-  Dhuhr:   { emoji: '☀️',  subtitle: 'Midday prayer' },
-  Asr:     { emoji: '🌤️', subtitle: 'Afternoon prayer' },
-  Maghrib: { emoji: '🌇', subtitle: 'Sunset prayer' },
-  Isha:    { emoji: '🌙', subtitle: 'Night prayer' },
+  Fajr:    { emoji: '🌅' },
+  Dhuhr:   { emoji: '☀️' },
+  Asr:     { emoji: '🌤️' },
+  Maghrib: { emoji: '🌇' },
+  Isha:    { emoji: '🌙' },
 };
 
 const PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
@@ -29,29 +31,37 @@ const PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 // ---------------------------------------------------------------------------
 // Android notification channels
 // ---------------------------------------------------------------------------
-async function ensureNotificationChannels() {
+export async function ensureNotificationChannels() {
   if (Platform.OS !== 'android') return;
 
-  // MAX importance = heads-up notification, bypasses Doze batching UI delivery
-  await Notifications.setNotificationChannelAsync('prayer-times', {
-    name: 'Prayer Times',
-    importance: Notifications.AndroidImportance.MAX,
-    sound: 'default',
-    vibrationPattern: [0, 250, 250, 250],
-    lightColor: '#1a7f4b',
-    description: 'Notifications for daily prayer times',
-    bypassDnd: false,
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-  });
+  try {
+    // MAX importance = heads-up notification, bypasses Doze batching UI delivery
+    await Notifications.setNotificationChannelAsync('prayer-times', {
+      name: 'Prayer Times',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#1a7f4b',
+      description: 'Notifications for daily prayer times',
+      bypassDnd: false,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
 
-  await Notifications.setNotificationChannelAsync('prayer-reminders', {
-    name: 'Prayer Reminders',
-    importance: Notifications.AndroidImportance.HIGH,
-    sound: 'default',
-    description: 'Pre-prayer reminder notifications',
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-  });
+    await Notifications.setNotificationChannelAsync('prayer-reminders', {
+      name: 'Prayer Reminders',
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
+      vibrationPattern: [0, 200, 200],
+      description: 'Pre-prayer reminder notifications',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
+  } catch (e) {
+    console.warn('[NotificationService] Failed to create notification channels:', e);
+  }
 }
+
+// Ensure channels are created as soon as the module loads
+ensureNotificationChannels().catch(console.warn);
 
 // ---------------------------------------------------------------------------
 // Permission helpers
@@ -231,7 +241,7 @@ export async function scheduleAllPrayerNotifications(coords, prayerSettings, not
       // Skip past times on today
       if (dayOffset === 0 && prayerDate <= now) continue;
 
-      const meta = PRAYER_META[prayer] || { emoji: '🕌', subtitle: 'Prayer time' };
+      const meta = PRAYER_META[prayer] || { emoji: '🕌' };
 
       // ── At-time notification ─────────────────────────────────────────────
       const atTimeId = `prayer-${prayer}-${dateKey}`;
@@ -239,8 +249,8 @@ export async function scheduleAllPrayerNotifications(coords, prayerSettings, not
         await Notifications.scheduleNotificationAsync({
           identifier: atTimeId,
           content: {
-            title: `${meta.emoji} ${prayer}`,
-            body: `${meta.subtitle} — ${times[prayer]}`,
+            title: `${meta.emoji} It's time for ${prayer}`,
+            body: `It's ${prayer} time now (${times[prayer]})`,
             sound: 'default',
             data: { prayer, type: 'at-time', time: times[prayer] },
             ...(Platform.OS === 'android' && { channelId: 'prayer-times', color: '#1a7f4b' }),
@@ -248,6 +258,7 @@ export async function scheduleAllPrayerNotifications(coords, prayerSettings, not
           trigger: {
             type: 'date',
             date: prayerDate,
+            ...(Platform.OS === 'android' && { channelId: 'prayer-times' }),
           },
         });
         scheduledCount++;
@@ -270,8 +281,8 @@ export async function scheduleAllPrayerNotifications(coords, prayerSettings, not
             await Notifications.scheduleNotificationAsync({
               identifier: reminderId,
               content: {
-                title: `⏰ ${prayer} in ${reminderMinutes} min`,
-                body: `${meta.subtitle} at ${times[prayer]}`,
+                title: `⏰ ${reminderMinutes} min until ${prayer}`,
+                body: `There's ${reminderMinutes} ${reminderMinutes === 1 ? 'minute' : 'minutes'} until ${prayer} (${times[prayer]})`,
                 sound: 'default',
                 data: { prayer, type: 'reminder', time: times[prayer] },
                 ...(Platform.OS === 'android' && { channelId: 'prayer-reminders' }),
@@ -279,11 +290,38 @@ export async function scheduleAllPrayerNotifications(coords, prayerSettings, not
               trigger: {
                 type: 'date',
                 date: reminderDate,
+                ...(Platform.OS === 'android' && { channelId: 'prayer-reminders' }),
               },
             });
             scheduledCount++;
           } catch (e) {
             console.warn(`[NotificationService] Failed to schedule ${prayer} reminder for ${dateKey}:`, e);
+          }
+        } else if (dayOffset === 0 && prayerDate > now && (prayerDate.getTime() - now.getTime()) >= 30_000) {
+          // If the pre-reminder threshold has already passed today, but prayer is still in the future!
+          // (e.g. user enabled 25 min reminder when 23 mins left).
+          // Schedule an immediate reminder (in 1.5s) so the user gets alerted right away!
+          const minsRemaining = Math.max(1, Math.round((prayerDate.getTime() - now.getTime()) / 60_000));
+          const reminderId = `prayer-reminder-${prayer}-${dateKey}-now`;
+          try {
+            await Notifications.scheduleNotificationAsync({
+              identifier: reminderId,
+              content: {
+                title: `⏰ ${minsRemaining} min until ${prayer}`,
+                body: `There's ${minsRemaining} ${minsRemaining === 1 ? 'minute' : 'minutes'} until ${prayer} (${times[prayer]})`,
+                sound: 'default',
+                data: { prayer, type: 'reminder', time: times[prayer] },
+                ...(Platform.OS === 'android' && { channelId: 'prayer-reminders' }),
+              },
+              trigger: {
+                type: 'date',
+                date: new Date(Date.now() + 1500),
+                ...(Platform.OS === 'android' && { channelId: 'prayer-reminders' }),
+              },
+            });
+            scheduledCount++;
+          } catch (e) {
+            console.warn(`[NotificationService] Failed to schedule catch-up reminder for ${prayer}:`, e);
           }
         }
       }

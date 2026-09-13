@@ -1,6 +1,6 @@
 {
   "name": "mosquemap",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -11,7 +11,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:e2e": "maestro test .maestro/"
+    "test:e2e": "maestro test .maestro/",
+    "notify-release": "node scripts/notify-waitlist-release.js",
+    "build:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-release-apk.ps1"
   },
   "dependencies": {
     "@expo-google-fonts/syne": "^0.4.2",

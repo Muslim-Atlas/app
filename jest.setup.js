@@ -1,4 +1,5 @@
 /* eslint-env jest */
+jest.setTimeout(15000);
 
 // In @testing-library/react-native v12.4+, extend-expect is built-in
 try {
@@ -73,6 +74,11 @@ jest.mock('expo-notifications', () => ({
   getAllScheduledNotificationsAsync: jest.fn(async () => []),
   requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
   getPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  AndroidNotificationPriority: {
+    HIGH: 'high',
+    DEFAULT: 'default',
+    LOW: 'low',
+  },
 }));
 
 // Mock expo-task-manager and expo-background-fetch

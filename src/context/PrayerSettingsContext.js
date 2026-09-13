@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { updateAppWidgets } from '../../widget-task-handler';
+import { scheduleAllPrayerNotifications, cancelAllPrayerNotifications } from '../utils/notificationService';
 
 const ASR_METHOD_KEY = '@muslimatlas_asr_method';
 const PRAYER_OFFSETS_KEY = '@muslimatlas_prayer_offsets';
@@ -107,11 +108,39 @@ export const PrayerSettingsProvider = ({ children }) => {
     loadSettings();
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Notification rescheduling helper
+  // ---------------------------------------------------------------------------
+
+  const reschedulePrayerNotifications = async (newNotificationSettings = notificationSettings, overrides = {}) => {
+    try {
+      if (!newNotificationSettings?.enabled) {
+        await cancelAllPrayerNotifications();
+        return;
+      }
+      const cachedLocStr = await AsyncStorage.getItem('@cached_location');
+      if (!cachedLocStr) return;
+      const parsed = JSON.parse(cachedLocStr);
+      if (!parsed?.latitude || !parsed?.longitude) return;
+      const coords = { latitude: parsed.latitude, longitude: parsed.longitude };
+      const currentPrayerSettings = {
+        asrMethod: overrides.asrMethod ?? asrMethod,
+        prayerOffsets: overrides.prayerOffsets ?? prayerOffsets,
+        calculationMethod: overrides.calculationMethod ?? calculationMethod,
+        highLatitudeRule: overrides.highLatitudeRule ?? highLatitudeRule,
+      };
+      await scheduleAllPrayerNotifications(coords, currentPrayerSettings, newNotificationSettings);
+    } catch (e) {
+      console.warn('PrayerSettingsContext failed to reschedule notifications:', e);
+    }
+  };
+
   const setAsrMethod = async (method) => {
     try {
       await AsyncStorage.setItem(ASR_METHOD_KEY, method);
       setAsrMethodState(method);
       updateAppWidgets().catch(console.warn);
+      reschedulePrayerNotifications(notificationSettings, { asrMethod: method }).catch(console.warn);
     } catch (e) {
       console.warn('Failed to save Asr method preference:', e);
     }
@@ -122,6 +151,7 @@ export const PrayerSettingsProvider = ({ children }) => {
       await AsyncStorage.setItem(CALCULATION_METHOD_KEY, method);
       setCalculationMethodState(method);
       updateAppWidgets().catch(console.warn);
+      reschedulePrayerNotifications(notificationSettings, { calculationMethod: method }).catch(console.warn);
     } catch (e) {
       console.warn('Failed to save calculation method preference:', e);
     }
@@ -132,6 +162,7 @@ export const PrayerSettingsProvider = ({ children }) => {
       await AsyncStorage.setItem(HIGH_LATITUDE_RULE_KEY, rule);
       setHighLatitudeRuleState(rule);
       updateAppWidgets().catch(console.warn);
+      reschedulePrayerNotifications(notificationSettings, { highLatitudeRule: rule }).catch(console.warn);
     } catch (e) {
       console.warn('Failed to save high latitude rule preference:', e);
     }
@@ -146,6 +177,7 @@ export const PrayerSettingsProvider = ({ children }) => {
       await AsyncStorage.setItem(PRAYER_OFFSETS_KEY, JSON.stringify(newOffsets));
       setPrayerOffsetsState(newOffsets);
       updateAppWidgets().catch(console.warn);
+      reschedulePrayerNotifications(notificationSettings, { prayerOffsets: newOffsets }).catch(console.warn);
     } catch (e) {
       console.warn('Failed to save prayer offset:', e);
     }
@@ -156,19 +188,17 @@ export const PrayerSettingsProvider = ({ children }) => {
       await AsyncStorage.setItem(PRAYER_OFFSETS_KEY, JSON.stringify(offsets));
       setPrayerOffsetsState(offsets);
       updateAppWidgets().catch(console.warn);
+      reschedulePrayerNotifications(notificationSettings, { prayerOffsets: offsets }).catch(console.warn);
     } catch (e) {
       console.warn('Failed to save prayer offsets:', e);
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // Notification settings setters
-  // ---------------------------------------------------------------------------
-
   const setNotificationSettings = async (newSettings) => {
     try {
       await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(newSettings));
       setNotificationSettingsState(newSettings);
+      reschedulePrayerNotifications(newSettings).catch(console.warn);
     } catch (e) {
       console.warn('Failed to save notification settings:', e);
     }

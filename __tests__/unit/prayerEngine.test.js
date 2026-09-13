@@ -1,4 +1,4 @@
-import { calculatePrayerTimes } from '../../src/utils/prayerEngine';
+import { calculatePrayerTimes, adjustTimeString } from '../../src/utils/prayerEngine';
 
 describe('prayerEngine Unit Tests', () => {
   const londonLat = 51.5074;
@@ -102,6 +102,65 @@ describe('prayerEngine Unit Tests', () => {
       const times = calculatePrayerTimes(londonLat, londonLng, testDate, { highLatitudeRule: rule });
       expect(times.Fajr).toMatch(timeRegex);
       expect(times.Isha).toMatch(timeRegex);
+    });
+  });
+
+  describe('adjustTimeString utility', () => {
+    it('adjusts positive and negative minutes correctly', () => {
+      expect(adjustTimeString('06:15', 5)).toBe('06:20');
+      expect(adjustTimeString('06:15', -10)).toBe('06:05');
+      expect(adjustTimeString('06:15', 0)).toBe('06:15');
+    });
+
+    it('strips timezone suffixes like (BST)', () => {
+      expect(adjustTimeString('06:15 (BST)', 3)).toBe('06:18');
+      expect(adjustTimeString('19:45 (BST)', 0)).toBe('19:45');
+    });
+
+    it('wraps around midnight correctly', () => {
+      expect(adjustTimeString('00:05', -10)).toBe('23:55');
+      expect(adjustTimeString('23:55', 10)).toBe('00:05');
+    });
+
+    it('gracefully handles missing or invalid input', () => {
+      expect(adjustTimeString('', 5)).toBe('');
+      expect(adjustTimeString(null, 5)).toBe('');
+      expect(adjustTimeString('invalid', 5)).toBe('invalid');
+    });
+  });
+
+  describe('LondonUnifiedDefault manual offset corrections on API timings', () => {
+    const mockApiTimings = {
+      Sunrise: '06:10 (BST)',
+      Maghrib: '19:20 (BST)',
+    };
+
+    it('applies manual corrections to Google/API sunrise and maghrib times', () => {
+      const times = calculatePrayerTimes(londonLat, londonLng, testDate, {
+        calculationMethod: 'LondonUnifiedDefault',
+        apiTimings: mockApiTimings,
+        prayerOffsets: {
+          Sunrise: 3,
+          Maghrib: -5,
+        },
+      });
+
+      expect(times.Sunrise).toBe('06:13');
+      expect(times.Maghrib).toBe('19:15');
+    });
+
+    it('uses unadjusted Google/API times when manual offsets are 0', () => {
+      const times = calculatePrayerTimes(londonLat, londonLng, testDate, {
+        calculationMethod: 'LondonUnifiedDefault',
+        apiTimings: mockApiTimings,
+        prayerOffsets: {
+          Sunrise: 0,
+          Maghrib: 0,
+        },
+      });
+
+      expect(times.Sunrise).toBe('06:10');
+      expect(times.Maghrib).toBe('19:20');
     });
   });
 });

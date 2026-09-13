@@ -1,4 +1,4 @@
-import { Coordinates, CalculationMethod, PrayerTimes, Madhab, HighLatitudeRule } from 'adhan';
+import { Coordinates, CalculationMethod, PrayerTimes, Madhab, HighLatitudeRule, Rounding } from 'adhan';
 
 /**
  * Calculates prayer times for a given location, date, and user settings.
@@ -23,10 +23,13 @@ export function calculatePrayerTimes(latitude, longitude, date = new Date(), opt
   let params;
 
   // Configure calculation method
-  // 'LondonUnifiedDefault' uses the same adhan base as 'LondonUnified';
-  // the caller applies Google API Sunrise/Maghrib overrides on top.
-  if (calculationMethod === 'LondonUnified' || calculationMethod === 'LondonUnifiedDefault') {
+  // 'LondonUnifiedDefault' (Muslim Atlas calculation) uses the Moonsighting base with Rounding.None
+  // so astronomical sunset/sunrise matches Google Search exactly without the +3m Moonsighting caution.
+  if (calculationMethod === 'LondonUnified') {
     params = CalculationMethod.MoonsightingCommittee();
+  } else if (calculationMethod === 'LondonUnifiedDefault') {
+    params = CalculationMethod.MoonsightingCommittee();
+    params.rounding = Rounding.None;
   } else if (typeof CalculationMethod[calculationMethod] === 'function') {
     params = CalculationMethod[calculationMethod]();
   } else {
@@ -81,12 +84,61 @@ export function calculatePrayerTimes(latitude, longitude, date = new Date(), opt
     return formatter.format(adjustedTime);
   };
 
-  return {
+  const times = {
     Fajr: formatAndAdjust(prayerTimes.fajr, prayerOffsets.Fajr || 0),
     Sunrise: formatAndAdjust(prayerTimes.sunrise, prayerOffsets.Sunrise || 0),
     Dhuhr: formatAndAdjust(prayerTimes.dhuhr, prayerOffsets.Dhuhr || 0),
     Asr: formatAndAdjust(prayerTimes.asr, prayerOffsets.Asr || 0),
-    Maghrib: formatAndAdjust(prayerTimes.maghrib, prayerOffsets.Maghrib || 0),
+    Maghrib: formatAndAdjust(
+      calculationMethod === 'LondonUnifiedDefault' ? prayerTimes.sunset : prayerTimes.maghrib,
+      prayerOffsets.Maghrib || 0
+    ),
     Isha: formatAndAdjust(prayerTimes.isha, prayerOffsets.Isha || 0),
   };
+
+  // When in 'LondonUnifiedDefault' (Muslim Atlas Default) and online apiTimings are provided,
+  // apply Google/API sunrise & sunset (maghrib) but ALWAYS apply user's manual corrections!
+  if (calculationMethod === 'LondonUnifiedDefault' && options.apiTimings) {
+    if (options.apiTimings.Sunrise) {
+      times.Sunrise = adjustTimeString(options.apiTimings.Sunrise, prayerOffsets.Sunrise || 0);
+    }
+    if (options.apiTimings.Maghrib) {
+      times.Maghrib = adjustTimeString(options.apiTimings.Maghrib, prayerOffsets.Maghrib || 0);
+    }
+  }
+
+  return times;
+}
+
+/**
+ * Adjusts a "HH:mm" or "HH:mm (BST)" time string by a given minute offset (+/-).
+ * Preserves 24-hour wrap-around (00:00 - 23:59).
+ *
+ * @param {string} timeStr - e.g. "06:15", "06:15 (BST)", "18:30"
+ * @param {number} offsetMinutes - e.g. +2, -5
+ * @returns {string} formatted "HH:mm"
+ */
+export function adjustTimeString(timeStr, offsetMinutes = 0) {
+  if (!timeStr) return '';
+  const clean = String(timeStr).split(' ')[0].trim();
+  if (!clean.includes(':')) return clean;
+
+  const [hStr, mStr] = clean.split(':');
+  const h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10);
+  if (isNaN(h) || isNaN(m)) return clean;
+
+  const offset = Number(offsetMinutes) || 0;
+  if (offset === 0) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}`;
+  }
+
+  let totalMinutes = h * 60 + m + offset;
+  totalMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+
+  const newH = Math.floor(totalMinutes / 60);
+  const newM = totalMinutes % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(newH)}:${pad(newM)}`;
 }

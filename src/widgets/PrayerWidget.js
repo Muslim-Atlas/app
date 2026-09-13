@@ -101,7 +101,7 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
               style={{
                 fontSize: 19,
                 color: '#ffffff',
-                fontFamily: 'sans-serif-bold',
+                fontFamily: 'Unbounded-Bold',
               }}
             />
             {/* Direct Refresh Widget Click Action Button */}
@@ -132,7 +132,7 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
               style={{
                 fontSize: 12,
                 color: '#e2e8f0', // Slate-200
-                fontFamily: 'sans-serif-medium',
+                fontFamily: 'Syne-Bold',
               }}
             />
           </FlexWidget>
@@ -153,7 +153,7 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
             style={{
               fontSize: 26,
               color: '#ffffff', // Bright white active prayer name
-              fontFamily: 'sans-serif-bold',
+              fontFamily: 'Unbounded-Bold',
             }}
           />
           
@@ -191,7 +191,7 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
               style={{
                 fontSize: 9,
                 color: '#ffffff',
-                fontFamily: 'sans-serif-medium',
+                fontFamily: 'Syne-Bold',
               }}
             />
           </FlexWidget>
@@ -244,7 +244,7 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
                   fontSize: 11,
                   color: isCurrent ? '#ffffff' : '#cbd5e1', // White vs Slate-300
                   textAlign: 'center',
-                  fontFamily: 'sans-serif-bold',
+                  fontFamily: 'Syne-Bold',
                 }}
               />
               <TextWidget
@@ -253,7 +253,7 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
                   fontSize: 15,
                   color: isCurrent ? '#ffffff' : '#f0f9ff', // White vs Sky-50
                   textAlign: 'center',
-                  fontFamily: 'sans-serif-bold',
+                  fontFamily: 'Unbounded-Bold',
                   marginTop: 2,
                 }}
               />
