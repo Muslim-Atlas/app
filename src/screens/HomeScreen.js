@@ -292,8 +292,20 @@ export default function HomeScreen({ navigation }) {
             const isActive = i === activeIndex;
             return (
               <View key={i} style={[styles.prayerItem, isActive && styles.prayerItemActive]}>
-                <Text style={[styles.prayerName, isActive && styles.prayerNameActive]}>{p.name}</Text>
-                <Text style={[styles.prayerTime, isActive && styles.prayerTimeActive]}>{p.time.split(' ')[0]}</Text>
+                <Text 
+                  style={[styles.prayerName, isActive && styles.prayerNameActive]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {p.name}
+                </Text>
+                <Text 
+                  style={[styles.prayerTime, isActive && styles.prayerTimeActive]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {p.time.split(' ')[0]}
+                </Text>
               </View>
             );
           })}
@@ -694,12 +706,12 @@ const styles = StyleSheet.create({
   sunriseText: { fontSize: 12, fontWeight: 'bold', color: '#fff' },
   prayerCardDivider: { height: 1, marginVertical: 12 },
   prayerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  prayerItem: { alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6, borderRadius: 16, flex: 1 },
-  prayerItemActive: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 16, overflow: 'hidden' },
-  prayerName: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 4, fontFamily: 'Syne-Bold' },
+  prayerItem: { alignItems: 'center', paddingVertical: 10, paddingHorizontal: 2, borderRadius: 14, flex: 1 },
+  prayerItemActive: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 14, overflow: 'hidden' },
+  prayerName: { fontSize: 11.5, color: 'rgba(255,255,255,0.7)', marginBottom: 4, fontFamily: 'Syne-Bold' },
   prayerNameActive: { color: '#fff' },
-  prayerTime: { fontSize: 15, fontWeight: 'bold', color: 'rgba(255,255,255,0.9)', fontVariant: ['tabular-nums'] },
-  prayerTimeActive: { color: '#fff', fontSize: 16, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
+  prayerTime: { fontSize: 14, fontWeight: 'bold', color: 'rgba(255,255,255,0.9)', fontVariant: ['tabular-nums'] },
+  prayerTimeActive: { color: '#fff', fontSize: 14.5, fontWeight: 'bold', fontVariant: ['tabular-nums'] },
   
   primaryStack: {
     paddingHorizontal: 20,
@@ -799,6 +811,7 @@ const styles = StyleSheet.create({
   },
   countdownStartsIn: {
     fontSize: 16,
+    fontFamily: 'Syne-Regular',
     lineHeight: 22,
   },
   countdownGrid: {
