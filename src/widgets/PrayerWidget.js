@@ -15,14 +15,21 @@ const sunIconSvg = `
 </svg>
 `;
 
+// Inline vector SVG refresh / sync icon
+const refreshIconSvg = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#bae6fd" width="10" height="10">
+  <path d="M464 16c-17.7 0-32 14.3-32 32v67.8C394.8 69.8 335.7 40 272 40 148.3 40 48 140.3 48 264s100.3 224 224 224c107.5 0 196.9-76.3 218.4-177.3 3.7-17.3-7.4-34.3-24.7-38s-34.3 7.4-38 24.7C411.3 379.6 345.8 432 272 432 179.2 432 104 356.8 104 264S179.2 96 272 96c52.4 0 99.4 24.5 130.4 63H352c-17.7 0-32 14.3-32 32s14.3 32 32 32h112c17.7 0 32-14.3 32-32V48c0-17.7-14.3-32-32-32z"/>
+</svg>
+`;
+
 export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, locationName = 'Current Location' }) {
   // Only the 5 daily prayers in the grid, matching the home screen card
   const prayers = [
-    { name: 'Fajr', time: prayerTimes.Fajr },
-    { name: 'Dhuhr', time: prayerTimes.Dhuhr },
-    { name: 'Asr', time: prayerTimes.Asr },
-    { name: 'Maghrib', time: prayerTimes.Maghrib },
-    { name: 'Isha', time: prayerTimes.Isha },
+    { name: 'Fajr', time: prayerTimes?.Fajr || '--:--' },
+    { name: 'Dhuhr', time: prayerTimes?.Dhuhr || '--:--' },
+    { name: 'Asr', time: prayerTimes?.Asr || '--:--' },
+    { name: 'Maghrib', time: prayerTimes?.Maghrib || '--:--' },
+    { name: 'Isha', time: prayerTimes?.Isha || '--:--' },
   ];
 
   // Dynamic Gregorian Date
@@ -47,15 +54,17 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
 
   // Next prayer time helper (covers all 6 items including Sunrise for next calculation)
   const fullPrayers = [
-    { name: 'Fajr', time: prayerTimes.Fajr },
-    { name: 'Sunrise', time: prayerTimes.Sunrise },
-    { name: 'Dhuhr', time: prayerTimes.Dhuhr },
-    { name: 'Asr', time: prayerTimes.Asr },
-    { name: 'Maghrib', time: prayerTimes.Maghrib },
-    { name: 'Isha', time: prayerTimes.Isha },
+    { name: 'Fajr', time: prayerTimes?.Fajr || '--:--' },
+    { name: 'Sunrise', time: prayerTimes?.Sunrise || '--:--' },
+    { name: 'Dhuhr', time: prayerTimes?.Dhuhr || '--:--' },
+    { name: 'Asr', time: prayerTimes?.Asr || '--:--' },
+    { name: 'Maghrib', time: prayerTimes?.Maghrib || '--:--' },
+    { name: 'Isha', time: prayerTimes?.Isha || '--:--' },
   ];
   const nextPrayerObject = fullPrayers.find(p => p.name === nextPrayerName);
-  const nextPrayerTimeStr = nextPrayerObject ? nextPrayerObject.time.split(' ')[0] : '';  return (
+  const nextPrayerTimeStr = nextPrayerObject ? nextPrayerObject.time.split(' ')[0] : '';
+
+  return (
     <FlexWidget
       clickAction="OPEN_APP"
       style={{
@@ -86,15 +95,33 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
       >
         {/* Left Side: Meta Info */}
         <FlexWidget style={{ flexDirection: 'column', flex: 1.2 }}>
-          <TextWidget
-            text="Muslim Atlas"
-            style={{
-              fontSize: 19,
-              color: '#ffffff',
-              fontFamily: 'sans-serif-bold',
-              fontWeight: 'bold',
-            }}
-          />
+          <FlexWidget style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TextWidget
+              text="Muslim Atlas"
+              style={{
+                fontSize: 19,
+                color: '#ffffff',
+                fontFamily: 'sans-serif-bold',
+              }}
+            />
+            {/* Direct Refresh Widget Click Action Button */}
+            <FlexWidget
+              clickAction="REFRESH_WIDGET"
+              style={{
+                marginLeft: 6,
+                padding: 4,
+                borderRadius: 6,
+                backgroundColor: '#ffffff1a',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <SvgWidget
+                svg={refreshIconSvg}
+                style={{ width: 11, height: 11 }}
+              />
+            </FlexWidget>
+          </FlexWidget>
           <FlexWidget style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
             <SvgWidget
               svg={locationPinSvg}
@@ -106,7 +133,6 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
                 fontSize: 12,
                 color: '#e2e8f0', // Slate-200
                 fontFamily: 'sans-serif-medium',
-                fontWeight: 'bold',
               }}
             />
           </FlexWidget>
@@ -128,11 +154,10 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
               fontSize: 26,
               color: '#ffffff', // Bright white active prayer name
               fontFamily: 'sans-serif-bold',
-              fontWeight: 'bold',
             }}
           />
           
-          {nextPrayerName && nextPrayerTimeStr && (
+          {nextPrayerName && nextPrayerTimeStr ? (
             <TextWidget
               text={`${nextPrayerName} at ${nextPrayerTimeStr}`}
               style={{
@@ -141,8 +166,8 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
                 marginTop: 1,
               }}
             />
-          )}
- 
+          ) : null}
+
           {/* Sunrise Pill */}
           <FlexWidget
             style={{
@@ -162,12 +187,11 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
               style={{ width: 9, height: 9, marginRight: 3 }}
             />
             <TextWidget
-              text={`Sunrise ${prayerTimes.Sunrise ? prayerTimes.Sunrise.split(' ')[0] : '--:--'}`}
+              text={`Sunrise ${prayerTimes?.Sunrise ? prayerTimes.Sunrise.split(' ')[0] : '--:--'}`}
               style={{
                 fontSize: 9,
                 color: '#ffffff',
                 fontFamily: 'sans-serif-medium',
-                fontWeight: 'bold',
               }}
             />
           </FlexWidget>
@@ -221,7 +245,6 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
                   color: isCurrent ? '#ffffff' : '#cbd5e1', // White vs Slate-300
                   textAlign: 'center',
                   fontFamily: 'sans-serif-bold',
-                  fontWeight: 'bold',
                 }}
               />
               <TextWidget
@@ -231,7 +254,6 @@ export function PrayerWidget({ prayerTimes, nextPrayerName, currentPrayerName, l
                   color: isCurrent ? '#ffffff' : '#f0f9ff', // White vs Sky-50
                   textAlign: 'center',
                   fontFamily: 'sans-serif-bold',
-                  fontWeight: 'bold',
                   marginTop: 2,
                 }}
               />

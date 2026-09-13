@@ -23,7 +23,9 @@ export function calculatePrayerTimes(latitude, longitude, date = new Date(), opt
   let params;
 
   // Configure calculation method
-  if (calculationMethod === 'LondonUnified') {
+  // 'LondonUnifiedDefault' uses the same adhan base as 'LondonUnified';
+  // the caller applies Google API Sunrise/Maghrib overrides on top.
+  if (calculationMethod === 'LondonUnified' || calculationMethod === 'LondonUnifiedDefault') {
     params = CalculationMethod.MoonsightingCommittee();
   } else if (typeof CalculationMethod[calculationMethod] === 'function') {
     params = CalculationMethod[calculationMethod]();

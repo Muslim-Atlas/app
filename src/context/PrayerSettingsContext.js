@@ -6,6 +6,7 @@ const ASR_METHOD_KEY = '@muslimatlas_asr_method';
 const PRAYER_OFFSETS_KEY = '@muslimatlas_prayer_offsets';
 const CALCULATION_METHOD_KEY = '@muslimatlas_calc_method';
 const HIGH_LATITUDE_RULE_KEY = '@muslimatlas_high_lat_rule';
+const NOTIFICATION_SETTINGS_KEY = '@muslimatlas_notification_settings';
 
 const DEFAULT_OFFSETS = {
   Fajr: 0,
@@ -16,6 +17,26 @@ const DEFAULT_OFFSETS = {
   Isha: 0,
 };
 
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  enabled: false,
+  prayers: {
+    Fajr: true,
+    Dhuhr: true,
+    Asr: true,
+    Maghrib: true,
+    Isha: true,
+  },
+  preReminders: {
+    Fajr: { enabled: false, minutes: 15 },
+    Dhuhr: { enabled: false, minutes: 15 },
+    Asr: { enabled: false, minutes: 15 },
+    Maghrib: { enabled: false, minutes: 15 },
+    Isha: { enabled: false, minutes: 15 },
+  },
+  preReminderEnabled: false,
+  preReminderMinutes: 15,
+};
+
 const PrayerSettingsContext = createContext();
 
 export const PrayerSettingsProvider = ({ children }) => {
@@ -23,6 +44,7 @@ export const PrayerSettingsProvider = ({ children }) => {
   const [prayerOffsets, setPrayerOffsetsState] = useState(DEFAULT_OFFSETS);
   const [calculationMethod, setCalculationMethodState] = useState('MuslimWorldLeague');
   const [highLatitudeRule, setHighLatitudeRuleState] = useState('Auto');
+  const [notificationSettings, setNotificationSettingsState] = useState(DEFAULT_NOTIFICATION_SETTINGS);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -32,6 +54,7 @@ export const PrayerSettingsProvider = ({ children }) => {
         const storedOffsets = await AsyncStorage.getItem(PRAYER_OFFSETS_KEY);
         const storedCalc = await AsyncStorage.getItem(CALCULATION_METHOD_KEY);
         const storedHighLat = await AsyncStorage.getItem(HIGH_LATITUDE_RULE_KEY);
+        const storedNotifications = await AsyncStorage.getItem(NOTIFICATION_SETTINGS_KEY);
         
         if (storedAsr) {
           setAsrMethodState(storedAsr);
@@ -48,6 +71,32 @@ export const PrayerSettingsProvider = ({ children }) => {
         }
         if (storedHighLat) {
           setHighLatitudeRuleState(storedHighLat);
+        }
+        if (storedNotifications) {
+          try {
+            const parsed = JSON.parse(storedNotifications);
+            const legacyEnabled = parsed.preReminderEnabled ?? false;
+            const legacyMinutes = parsed.preReminderMinutes ?? 15;
+            const defaultPreReminders = {
+              Fajr: { enabled: legacyEnabled, minutes: legacyMinutes },
+              Dhuhr: { enabled: legacyEnabled, minutes: legacyMinutes },
+              Asr: { enabled: legacyEnabled, minutes: legacyMinutes },
+              Maghrib: { enabled: legacyEnabled, minutes: legacyMinutes },
+              Isha: { enabled: legacyEnabled, minutes: legacyMinutes },
+            };
+
+            setNotificationSettingsState({
+              ...DEFAULT_NOTIFICATION_SETTINGS,
+              ...parsed,
+              prayers: { ...DEFAULT_NOTIFICATION_SETTINGS.prayers, ...parsed.prayers },
+              preReminders: {
+                ...defaultPreReminders,
+                ...(parsed.preReminders || {}),
+              },
+            });
+          } catch (e) {
+            console.error('Failed to parse stored notification settings:', e);
+          }
         }
       } catch (e) {
         console.warn('Failed to load prayer settings:', e);
@@ -112,6 +161,61 @@ export const PrayerSettingsProvider = ({ children }) => {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Notification settings setters
+  // ---------------------------------------------------------------------------
+
+  const setNotificationSettings = async (newSettings) => {
+    try {
+      await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(newSettings));
+      setNotificationSettingsState(newSettings);
+    } catch (e) {
+      console.warn('Failed to save notification settings:', e);
+    }
+  };
+
+  const updatePrayerNotification = async (prayerName, enabled) => {
+    const newSettings = {
+      ...notificationSettings,
+      prayers: { ...notificationSettings.prayers, [prayerName]: enabled },
+    };
+    await setNotificationSettings(newSettings);
+  };
+
+  const setPreReminderEnabled = async (enabled) => {
+    const newSettings = { ...notificationSettings, preReminderEnabled: enabled };
+    await setNotificationSettings(newSettings);
+  };
+
+  const setPreReminderMinutes = async (minutes) => {
+    const clamped = Math.min(60, Math.max(5, parseInt(minutes, 10) || 15));
+    const newSettings = { ...notificationSettings, preReminderMinutes: clamped };
+    await setNotificationSettings(newSettings);
+  };
+
+  const updatePrayerPreReminder = async (prayerName, preReminderData) => {
+    const current = notificationSettings.preReminders?.[prayerName] || { enabled: false, minutes: 15 };
+    const newSettings = {
+      ...notificationSettings,
+      preReminders: {
+        ...notificationSettings.preReminders,
+        [prayerName]: {
+          ...current,
+          ...preReminderData,
+          minutes: preReminderData.minutes != null
+            ? Math.min(60, Math.max(5, parseInt(preReminderData.minutes, 10) || 15))
+            : current.minutes,
+        },
+      },
+    };
+    await setNotificationSettings(newSettings);
+  };
+
+  const setNotificationsEnabled = async (enabled) => {
+    const newSettings = { ...notificationSettings, enabled };
+    await setNotificationSettings(newSettings);
+  };
+
   if (!isReady) return null;
 
   return (
@@ -121,11 +225,18 @@ export const PrayerSettingsProvider = ({ children }) => {
         prayerOffsets,
         calculationMethod,
         highLatitudeRule,
+        notificationSettings,
         setAsrMethod,
         updatePrayerOffset,
         setPrayerOffsets,
         setCalculationMethod,
         setHighLatitudeRule,
+        setNotificationSettings,
+        setNotificationsEnabled,
+        updatePrayerNotification,
+        updatePrayerPreReminder,
+        setPreReminderEnabled,
+        setPreReminderMinutes,
       }}
     >
       {children}

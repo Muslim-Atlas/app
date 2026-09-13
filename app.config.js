@@ -34,11 +34,29 @@ export default {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY,
         },
       },
+      // Required for zero-delay, exact prayer time notifications
+      permissions: [
+        'SCHEDULE_EXACT_ALARM',   // Android 12+ (API 31+) — exact AlarmManager
+        'USE_EXACT_ALARM',        // Android 13+ (API 33+) — alternative exact alarm grant
+        'RECEIVE_BOOT_COMPLETED', // Allows future rescheduling after device reboot
+        'POST_NOTIFICATIONS',     // Android 13+ — show notifications at all
+      ],
     },
     web: {
       favicon: './assets/favicon.png',
     },
     plugins: [
+      'expo-font',
+      [
+        'expo-notifications',
+        {
+          icon: './assets/icon.png',
+          color: '#1a7f4b',
+          defaultChannel: 'prayer-times',
+          // Ensures Android uses setExactAndAllowWhileIdle for precise delivery
+          enableBackgroundRemoteNotifications: false,
+        },
+      ],
       [
         '@rnmapbox/maps',
         {
