@@ -66,7 +66,7 @@ const MosqueDetailSheet = React.forwardRef(
   }, ref) => {
     const snapPoints = useMemo(() => ['25%', '60%', '90%', '100%'], []);
     const insets = useSafeAreaInsets();
-    const { fetchPlaceDeepData, fetchPlaceFromFirebase, getCrowdsourcedData, setSearchOrigin, setSearchLocationName, searchArea } = useContext(MosqueContext);
+    const { fetchPlaceDeepData, fetchPlaceFromFirebase, getCrowdsourcedData, setSearchOrigin, setSearchLocationName, searchArea, searchHalalFood } = useContext(MosqueContext);
     const { theme } = useTheme();
 
     // State
@@ -197,8 +197,8 @@ const MosqueDetailSheet = React.forwardRef(
     }, [nextPrayer]);
 
     const isMosqueCTA = activeCategory === 'mosque';
-    const ctaBgColor = isMosqueCTA ? '#B5651D' : '#059669';
-    const ctaBorderColor = isMosqueCTA ? '#9E5414' : '#047857';
+    const ctaBgColor = isMosqueCTA ? '#EA580C' : '#059669';
+    const ctaBorderColor = isMosqueCTA ? '#C2410C' : '#047857';
     const ctaColor = '#ffffff';
 
     // Always render BottomSheet so the ref is valid before mosque is selected.
@@ -220,7 +220,7 @@ const MosqueDetailSheet = React.forwardRef(
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={[styles.mosqueName, { color: theme.text }]} numberOfLines={2}>
-                {mosque.displayName.text}
+                {mosque.displayName?.text || mosque.name || 'Location'}
               </Text>
               
               <View style={styles.ratingRow}>
@@ -298,7 +298,7 @@ const MosqueDetailSheet = React.forwardRef(
           )}
  
           {/* ── Photo & Prayer Times Overlay ── */}
-          <View style={styles.photoWrapper}>
+          <View style={[styles.photoWrapper, activeCategory === 'food' && { height: 160 }]}>
             {photoUri ? (
               <Image source={{ uri: photoUri }} style={styles.photo} />
             ) : (
@@ -352,54 +352,54 @@ const MosqueDetailSheet = React.forwardRef(
           )}
  
           {/* ── Live Stats ── */}
-          <View style={[styles.statsRow, { backgroundColor: theme.background }]}>
+          <View style={[styles.statsRow, { backgroundColor: theme.chipBg, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth }]}>
             <View style={styles.statBox}>
-              <Ionicons name="car-outline" size={18} color="#3B82F6" style={{ marginRight: 6 }} />
+              <Ionicons name="car-outline" size={16} color="#3B82F6" style={{ marginRight: 6 }} />
               <Text style={[styles.statValue, { color: theme.text }]}>
                 {estimatedTimes?.['driving-traffic'] ? `${estimatedTimes['driving-traffic']} min` : '—'}
               </Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
             <View style={styles.statBox}>
-              <Ionicons name="walk-outline" size={18} color="#F97316" style={{ marginRight: 6 }} />
+              <Ionicons name="walk-outline" size={16} color="#F97316" style={{ marginRight: 6 }} />
               <Text style={[styles.statValue, { color: theme.text }]}>
                 {estimatedTimes?.walking ? `${estimatedTimes.walking} min` : '—'}
               </Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
             <View style={styles.statBox}>
-              <Ionicons name="subway-outline" size={18} color="#8B5CF6" style={{ marginRight: 6 }} />
+              <Ionicons name="subway-outline" size={16} color="#8B5CF6" style={{ marginRight: 6 }} />
               <Text style={[styles.statValue, { color: theme.text }]}>
                 {estimatedTimes?.transit ? `${estimatedTimes.transit} min` : '—'}
               </Text>
             </View>
           </View>
- 
+
           {/* ── Action Buttons ── */}
           <View style={styles.actionBar}>
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: theme.background }]}
+              style={[styles.actionBtn, { backgroundColor: theme.chipBg, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth }]}
               onPress={handleInfo}
               activeOpacity={0.7}
             >
-              <Ionicons name="information-circle-outline" size={24} color="#0284C7" style={{ marginBottom: 4 }} />
+              <Ionicons name="information-circle-outline" size={22} color="#0284C7" style={{ marginBottom: 4 }} />
               <Text style={[styles.actionLabel, { color: theme.text }]}>Info</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: theme.background }]}
+              style={[styles.actionBtn, { backgroundColor: theme.chipBg, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth }]}
               onPress={handleWebsite}
               activeOpacity={0.7}
             >
-              <Ionicons name="globe-outline" size={24} color="#2563EB" style={{ marginBottom: 4 }} />
+              <Ionicons name="globe-outline" size={22} color="#2563EB" style={{ marginBottom: 4 }} />
               <Text style={[styles.actionLabel, { color: theme.text }]}>Website</Text>
             </TouchableOpacity>
             {onShowOnMap && (
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: theme.background }]}
+                style={[styles.actionBtn, { backgroundColor: theme.chipBg, borderColor: theme.border, borderWidth: StyleSheet.hairlineWidth }]}
                 onPress={onShowOnMap}
                 activeOpacity={0.7}
               >
-                <Ionicons name="location-outline" size={24} color="#F43F5E" style={{ marginBottom: 4 }} />
+                <Ionicons name="location-outline" size={22} color="#F43F5E" style={{ marginBottom: 4 }} />
                 <Text style={[styles.actionLabel, { color: theme.text }]}>Map</Text>
               </TouchableOpacity>
             )}
@@ -408,7 +408,7 @@ const MosqueDetailSheet = React.forwardRef(
               onPress={handleNavigate}
               activeOpacity={0.7}
             >
-              <Ionicons name="navigate-outline" size={24} color="#fff" style={{ marginBottom: 4 }} />
+              <Ionicons name="navigate-outline" size={22} color="#fff" style={{ marginBottom: 4 }} />
               <Text style={[styles.actionLabel, styles.navLabel]}>
                 Directions
               </Text>
@@ -419,7 +419,7 @@ const MosqueDetailSheet = React.forwardRef(
           {(deepLoading || weekdayText) && (
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <View style={styles.cardHeader}>
-                <Ionicons name="time-outline" size={20} color="#F59E0B" style={{ marginRight: 6 }} />
+                <Ionicons name="time-outline" size={16} color="#F59E0B" style={{ marginRight: 6 }} />
                 <Text style={[styles.cardTitle, { color: theme.text }]}>Opening Hours</Text>
                 {deepLoading && (
                   <ActivityIndicator size="small" color={theme.primary} />
@@ -450,7 +450,7 @@ const MosqueDetailSheet = React.forwardRef(
           {(deepLoading || nearbyTransit.length > 0) && (
             <View style={[styles.card, { backgroundColor: theme.card }]}>
               <View style={styles.cardHeader}>
-                <Ionicons name="subway-outline" size={20} color="#8B5CF6" style={{ marginRight: 6 }} />
+                <Ionicons name="subway-outline" size={16} color="#8B5CF6" style={{ marginRight: 6 }} />
                 <Text style={[styles.cardTitle, { color: theme.text }]}>Nearby Transport</Text>
                 {deepLoading && (
                   <ActivityIndicator size="small" color={theme.primary} />
@@ -491,7 +491,11 @@ const MosqueDetailSheet = React.forwardRef(
               if (setViewMode) setViewMode('list');
               
               // Only trigger the deep search on button tap!
-              await searchArea(newOrigin.coords.latitude, newOrigin.coords.longitude, 5000, newOrigin, 20, true);
+              if (targetCategory === 'food') {
+                await searchHalalFood(newOrigin.coords.latitude, newOrigin.coords.longitude, newOrigin, 20, true);
+              } else {
+                await searchArea(newOrigin.coords.latitude, newOrigin.coords.longitude, 10000, newOrigin, 20, true);
+              }
             }}
           >
             <View style={styles.crossNavigateContent}>
@@ -578,7 +582,7 @@ const styles = StyleSheet.create({
   },
   amenityChipText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#334155',
   },
   headerLeft: {
@@ -587,7 +591,7 @@ const styles = StyleSheet.create({
   },
   mosqueName: {
     fontSize: 22,
-    fontWeight: 'bold',
+    fontFamily: 'Unbounded-Bold',
     color: '#111',
     letterSpacing: -0.3,
   },
@@ -598,7 +602,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ratingStar: { fontSize: 14 },
-  ratingText: { fontSize: 14, fontWeight: '600', color: '#333' },
+  ratingText: { fontSize: 14, fontWeight: 'bold', color: '#333' },
   ratingCount: { fontSize: 13, color: '#888' },
   headerRight: {
     alignItems: 'flex-end',
@@ -621,7 +625,7 @@ const styles = StyleSheet.create({
   },
   pageBtnText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Unbounded-Bold',
     color: '#334155',
   },
   pageBtnTextDisabled: {
@@ -635,7 +639,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeBtnText: { fontSize: 16, color: '#666', fontWeight: 'bold' },
+  closeBtnText: { fontSize: 16, color: '#666', fontFamily: 'Unbounded-Bold' },
 
   // Photo
   photoWrapper: {
@@ -648,12 +652,12 @@ const styles = StyleSheet.create({
   },
   photo: {
     width: '100%',
-    height: '100%',
+    flex: 1,
     backgroundColor: '#eee',
   },
   photoPlaceholder: {
     width: '100%',
-    height: '100%',
+    flex: 1,
     backgroundColor: '#f2f2f2',
     alignItems: 'center',
     justifyContent: 'center',
@@ -662,11 +666,7 @@ const styles = StyleSheet.create({
 
   // Prayer Overlay
   prayerOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     paddingTop: 6,
     paddingBottom: 10,
     paddingHorizontal: 8,
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
   prayerOverlayName: {
     color: '#ccc',
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: 'Syne-Bold',
     marginBottom: 2,
     letterSpacing: 0.5,
   },
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
   prayerOverlayTime: {
     color: '#fff',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: 'bold',
     fontVariant: ['tabular-nums'],
   },
   prayerOverlayTimeActive: {
@@ -725,15 +725,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#f7f8fa',
     borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
+    padding: 10,
+    marginBottom: 10,
     alignItems: 'center',
   },
   statBox: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   statDivider: { width: 1, height: 20, backgroundColor: '#e0e0e0' },
-  statLabel: { fontSize: 11, color: '#999', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
-  statValue: { fontSize: 17, fontWeight: 'bold', color: '#111' },
-  nextPrayerNotice: { fontSize: 14, color: '#2e7d32', fontWeight: '600', textAlign: 'center', marginBottom: 8 },
+  statLabel: { fontSize: 11, color: '#999', marginBottom: 4, fontFamily: 'Syne-Bold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statValue: { fontSize: 14, fontFamily: 'Unbounded-Bold', fontVariant: ['tabular-nums'] },
+  nextPrayerNotice: { fontSize: 14, color: '#059669', fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
 
   // Action bar
   actionBar: {
@@ -745,33 +745,30 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: '#f7f8fa',
     borderRadius: 14,
-    paddingVertical: 14,
+    paddingVertical: 10,
     paddingHorizontal: 4,
   },
-  navBtn: {
-    backgroundColor: '#2e7d32',
-  },
+  navBtn: {},
   actionIcon: { fontSize: 22, marginBottom: 4 },
-  actionLabel: { fontSize: 11, fontWeight: '600', color: '#444', textTransform: 'uppercase', letterSpacing: 0.3 },
+  actionLabel: { fontSize: 11, fontFamily: 'Syne-Bold', textTransform: 'uppercase', letterSpacing: 0.3 },
   navLabel: { color: '#fff' },
 
   // Card
   card: {
-    backgroundColor: '#f7f8fa',
     borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
     gap: 8,
   },
   cardIcon: { fontSize: 18 },
-  cardTitle: { fontSize: 15, fontWeight: 'bold', color: '#222', flex: 1 },
+  cardTitle: { fontSize: 14, fontFamily: 'Syne-Bold', flex: 1 },
 
   // Status badge
   statusBadge: {
@@ -779,15 +776,15 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
   },
-  openBadge: { backgroundColor: '#e8f5e9' },
-  closedBadge: { backgroundColor: '#fce4ec' },
-  statusText: { fontSize: 12, fontWeight: '700' },
-  openBadgeText: { color: '#2e7d32' },
-  closedBadgeText: { color: '#c62828' },
+  openBadge: { backgroundColor: 'rgba(5, 150, 105, 0.15)' },
+  closedBadge: { backgroundColor: 'rgba(239, 68, 68, 0.15)' },
+  statusText: { fontSize: 12, fontFamily: 'Syne-Bold' },
+  openBadgeText: { color: '#059669' },
+  closedBadgeText: { color: '#ef4444' },
 
   // Hours
   hoursToggle: { marginBottom: 8 },
-  hoursToggleText: { fontSize: 13, color: '#4A90E2', fontWeight: '600' },
+  hoursToggleText: { fontSize: 13, color: '#4A90E2', fontWeight: 'bold' },
   hourLine: { fontSize: 13, color: '#555', lineHeight: 22 },
 
   // Skeleton
@@ -808,12 +805,11 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 10,
   },
-  sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#222' },
+  sectionTitle: { fontSize: 14, fontFamily: 'Syne-Bold' },
 
   // Cross Navigation CTA
   sectionDivider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
     marginTop: 6,
     marginBottom: 12,
   },
@@ -821,9 +817,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 16,
     padding: 16,
     marginBottom: 8,
@@ -837,14 +831,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   crossNavigateText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontSize: 15,
+    fontFamily: 'Syne-Bold',
   },
   crossNavigateArrow: {
     fontSize: 20,
-    color: '#64748B',
-    fontWeight: '600',
+    fontFamily: 'Syne-Bold',
   },
 
   // Transit
@@ -854,38 +846,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
-  transitName: { fontSize: 14, color: '#333', fontWeight: '500', flex: 1 },
+  transitName: { fontSize: 14, flex: 1 },
   transitDist: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
 
   // Parking/Halal Specifics
   parkingCard: {
     width: 220,
     marginRight: 16,
-    backgroundColor: '#fff',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#eee',
     justifyContent: 'space-between',
   },
   parkingInfo: {
     marginBottom: 12,
   },
   parkingRouteBtn: {
-    backgroundColor: '#e3f2fd',
     paddingVertical: 8,
     borderRadius: 8,
     alignItems: 'center',
   },
   parkingRouteText: {
-    color: '#1976d2',
-    fontWeight: '700',
+    fontFamily: 'Syne-Bold',
     fontSize: 12,
   },
 });
