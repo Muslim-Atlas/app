@@ -4,6 +4,7 @@ import SettingsScreen from '../../src/components/SettingsScreen';
 import { PrayerSettingsProvider } from '../../src/context/PrayerSettingsContext';
 import { ThemeProvider } from '../../src/context/ThemeContext';
 import { AuthProvider } from '../../src/context/AuthContext';
+import { PreferencesProvider } from '../../src/context/PreferencesContext';
 
 // Wrap with all required app contexts
 const renderSettings = () => {
@@ -11,7 +12,9 @@ const renderSettings = () => {
     <AuthProvider>
       <ThemeProvider>
         <PrayerSettingsProvider>
-          <SettingsScreen />
+          <PreferencesProvider>
+            <SettingsScreen />
+          </PreferencesProvider>
         </PrayerSettingsProvider>
       </ThemeProvider>
     </AuthProvider>
@@ -76,4 +79,26 @@ describe('SettingsScreen Component Tests', () => {
     // Tap to select Muslim Atlas (Default)
     fireEvent.press(getByText('Muslim Atlas (Default)'));
   });
+
+  it('allows expanding distance units picker and selecting Kilometers (km)', async () => {
+    const { getByText, getAllByText } = renderSettings();
+
+    await waitFor(() => {
+      expect(getByText('Preferences')).toBeTruthy();
+      expect(getByText('Distance Units')).toBeTruthy();
+    });
+
+    // Press the Distance Units row to expand the picker
+    fireEvent.press(getByText('Distance Units'));
+
+    // Verify the expanded picker shows Miles and Kilometers
+    await waitFor(() => {
+      expect(getByText('Miles (UK / US)')).toBeTruthy();
+      expect(getByText('Kilometers (Metric)')).toBeTruthy();
+    });
+
+    // Tap to select Kilometers (Metric)
+    fireEvent.press(getByText('Kilometers (Metric)'));
+  });
 });
+

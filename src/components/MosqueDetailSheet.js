@@ -14,6 +14,7 @@ import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MosqueContext } from '../context/MosqueContext';
 import { useTheme } from '../context/ThemeContext';
+import { usePreferences } from '../context/PreferencesContext';
 import MosqueExtendedInfoModal from './MosqueExtendedInfoModal';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -40,12 +41,6 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function formatDistance(meters) {
-  if (!meters) return '—';
-  const miles = meters * 0.000621371;
-  return miles >= 0.1 ? `${miles.toFixed(1)} mi` : `${Math.round(meters * 3.28084)} ft`;
-}
-
 const MosqueDetailSheet = React.forwardRef(
   ({ 
     mosque, 
@@ -68,6 +63,7 @@ const MosqueDetailSheet = React.forwardRef(
     const insets = useSafeAreaInsets();
     const { fetchPlaceDeepData, fetchPlaceFromFirebase, getCrowdsourcedData, setSearchOrigin, setSearchLocationName, searchArea, searchHalalFood } = useContext(MosqueContext);
     const { theme } = useTheme();
+    const { formatDistance } = usePreferences();
 
     // State
     const [nearbyTransit, setNearbyTransit] = useState([]);
@@ -557,7 +553,7 @@ const MosqueDetailSheet = React.forwardRef(
                         </View>
                         <View style={[styles.transitDistBadge, { backgroundColor: theme.card }]}>
                           <Text style={[styles.transitDist, { color: theme.primary }]}>
-                            {station.distance >= 1000 ? `${(station.distance / 1000).toFixed(1)} km` : `${station.distance} m`}
+                            {formatDistance(station.distance)}
                           </Text>
                         </View>
                       </View>

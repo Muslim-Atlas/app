@@ -13,6 +13,7 @@ import MosqueDetailSheet from '../components/MosqueDetailSheet';
 import RoutePreviewOverlay from '../components/RoutePreviewOverlay';
 import LocationSearchModal from '../components/LocationSearchModal';
 import { useTheme } from '../context/ThemeContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { calculatePrayerTimes } from '../utils/prayerEngine';
 import { usePrayerSettings } from '../context/PrayerSettingsContext';
@@ -96,6 +97,7 @@ export default function MapScreen({ route, navigation }) {
   } = React.useContext(MosqueContext);
 
   const { theme } = useTheme();
+  const { formatDistance } = usePreferences();
   const { asrMethod, prayerOffsets, calculationMethod, highLatitudeRule } = usePrayerSettings();
 
   const [searchModalVisible, setSearchModalVisible] = useState(false);
@@ -954,11 +956,7 @@ export default function MapScreen({ route, navigation }) {
   // Helper to render the Mosque FlatList cards
   const renderMosqueCard = ({ item }) => {
     const distMeters = item.distMeters;
-    let distText = '—';
-    if (distMeters) {
-      const miles = distMeters * 0.000621371;
-      distText = miles >= 0.1 ? `${miles.toFixed(1)} mi` : `${Math.round(distMeters * 3.28084)} ft`;
-    }
+    const distText = formatDistance(distMeters);
     const walkMins = (distMeters && !isNaN(distMeters)) ? Math.round(distMeters / 80) : null;
     let photoUrl = null;
     if (item.photos?.[0]?.name) {

@@ -7,6 +7,9 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useFonts } from 'expo-font';
+import { Unbounded_400Regular, Unbounded_700Bold } from '@expo-google-fonts/unbounded';
+import { Syne_400Regular, Syne_700Bold } from '@expo-google-fonts/syne';
 
 import HomeScreen from './src/screens/HomeScreen';
 import MapScreen from './src/screens/MapScreen';
@@ -14,6 +17,7 @@ import SettingsScreen from './src/components/SettingsScreen';
 import { MosqueProvider } from './src/context/MosqueContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { PreferencesProvider } from './src/context/PreferencesContext';
 import { PrayerSettingsProvider } from './src/context/PrayerSettingsContext';
 import Mapbox from '@rnmapbox/maps';
 
@@ -35,20 +39,12 @@ const MainNavigator = () => {
       border: 'transparent',
       notification: theme.primary,
     },
-    fonts: Platform.select({
-      ios: {
-        regular: { fontFamily: 'System', fontWeight: '400' },
-        medium: { fontFamily: 'System', fontWeight: '500' },
-        bold: { fontFamily: 'System', fontWeight: '700' },
-        heavy: { fontFamily: 'System', fontWeight: '900' },
-      },
-      default: {
-        regular: { fontFamily: 'sans-serif', fontWeight: 'normal' },
-        medium: { fontFamily: 'sans-serif-medium', fontWeight: 'normal' },
-        bold: { fontFamily: 'sans-serif', fontWeight: 'bold' },
-        heavy: { fontFamily: 'sans-serif', fontWeight: 'bold' },
-      },
-    }),
+    fonts: {
+      regular: { fontFamily: 'Syne-Regular' },
+      medium: { fontFamily: 'Syne-Bold' },
+      bold: { fontFamily: 'Unbounded-Bold' },
+      heavy: { fontFamily: 'Unbounded-Bold' },
+    },
   };
   
   return (
@@ -87,29 +83,31 @@ const MainNavigator = () => {
 };
 
 export default function App() {
-  const [isReady, setIsReady] = React.useState(false);
+  const [fontsLoaded] = useFonts({
+    'Unbounded-Regular': Unbounded_400Regular,
+    'Unbounded-Bold': Unbounded_700Bold,
+    'Syne-Regular': Syne_400Regular,
+    'Syne-Bold': Syne_700Bold,
+  });
 
-  React.useEffect(() => {
-    const t = setTimeout(() => setIsReady(true), 100);
-    return () => clearTimeout(t);
-  }, []);
-
-  if (!isReady) {
+  if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: '#ffffff' }} />;
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-        <PrayerSettingsProvider>
-          <AuthProvider>
-            <MosqueProvider>
-              <SafeAreaProvider>
-                <MainNavigator />
-              </SafeAreaProvider>
-            </MosqueProvider>
-          </AuthProvider>
-        </PrayerSettingsProvider>
+        <PreferencesProvider>
+          <PrayerSettingsProvider>
+            <AuthProvider>
+              <MosqueProvider>
+                <SafeAreaProvider>
+                  <MainNavigator />
+                </SafeAreaProvider>
+              </MosqueProvider>
+            </AuthProvider>
+          </PrayerSettingsProvider>
+        </PreferencesProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );

@@ -7,6 +7,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { MosqueContext } from '../context/MosqueContext';
 
 const GOOGLE_PLACES_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY;
@@ -19,12 +20,6 @@ function haversineM(lat1, lon1, lat2, lon2) {
 }
 
 function walkMins(meters) { return Math.max(1, Math.round(meters / 80)); }
-
-function formatDistance(meters) {
-  if (!meters) return '—';
-  const miles = meters * 0.000621371;
-  return miles >= 0.1 ? `${miles.toFixed(1)} mi` : `${Math.round(meters * 3.28084)} ft`;
-}
 
 function formatTimeDiff(totalMins) {
   if (totalMins < 60) return `${totalMins} min`;
@@ -58,6 +53,7 @@ export default function RoutePreviewOverlay({
 }) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { formatDistance } = usePreferences();
   const { appendParkingToCache, fetchMosqueDeepData } = useContext(MosqueContext);
 
   const [parkingLots, setParkingLots] = useState([]);

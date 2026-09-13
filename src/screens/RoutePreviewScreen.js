@@ -14,6 +14,7 @@ import {
 // SafeAreaView from react-native (react-native-safe-area-context not installed)
 import { SafeAreaView } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Polyline, Marker } from 'react-native-maps';
 
@@ -30,12 +31,6 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function formatDistance(meters) {
-  if (!meters) return '—';
-  const miles = meters * 0.000621371;
-  return miles >= 0.1 ? `${miles.toFixed(1)} mi` : `${Math.round(meters * 3.28084)} ft`;
 }
 
 function estimateMinutes(distanceM, mode) {
@@ -83,6 +78,7 @@ function vehicleIcon(type) {
 
 // Parse Directions API step array into a compact chain of "segments"
 function buildTransitChain(steps) {
+  if (!Array.isArray(steps)) return [];
   return steps
     .map((step) => {
       if (step.travel_mode === 'WALKING') {
@@ -135,6 +131,7 @@ const MODES = [
 
 export default function RoutePreviewScreen({ mosque, userLocation, onBack, onStart }) {
   const { theme, isDark } = useTheme();
+  const { formatDistance } = usePreferences();
   const [selectedMode, setSelectedMode] = useState(null);
 
   // Transit data
@@ -220,11 +217,15 @@ export default function RoutePreviewScreen({ mosque, userLocation, onBack, onSta
         }
 
         const route = data.routes[0];
-        const leg = route.legs[0];
+        const leg = route.legs?.[0];
+        if (!leg) {
+          setTransitLoading(false);
+          return;
+        }
 
         setTransitData(leg);
         setTransitDurationText(leg.duration?.text ?? null);
-        setTransitChain(buildTransitChain(leg.steps, '#1565C0', 16));
+        setTransitChain(buildTransitChain(leg.steps));
 
         const decoded = decodePolyline(route.overview_polyline?.points);
         setPolylineCoords(decoded);
@@ -332,7 +333,7 @@ export default function RoutePreviewScreen({ mosque, userLocation, onBack, onSta
             <MaterialCommunityIcons name="mosque" size={28} color={theme.primary} />
             <View style={styles.pinInfo}>
               <Text style={styles.destName} numberOfLines={1}>
-                {mosque.displayName.text}
+                {mosque.displayName?.text || mosque.name || 'Destination'}
               </Text>
               <Text style={styles.destAddress} numberOfLines={2}>
                 {mosque.formattedAddress}
@@ -487,7 +488,7 @@ export default function RoutePreviewScreen({ mosque, userLocation, onBack, onSta
               <View style={styles.routeRowContent}>
                 <Text style={styles.routeRowLabel}>To</Text>
                 <Text style={styles.routeRowValue} numberOfLines={1}>
-                  {mosque.displayName.text}
+                  {mosque.displayName?.text || mosque.name || 'Destination'}
                 </Text>
               </View>
             </View>
