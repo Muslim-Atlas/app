@@ -243,7 +243,7 @@ export default function RoutePreviewOverlay({
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
 
       {/* ── TOP SECTION: back + from/to + mode tabs ── */}
-      <View style={[styles.topSection, { paddingTop: insets.top + 8 }]} pointerEvents="auto">
+      <View style={[styles.topSection, { paddingTop: insets.top + 4 }]} pointerEvents="auto">
 
         {/* Back + From/To row */}
         <View style={styles.headerRow}>
@@ -300,16 +300,19 @@ export default function RoutePreviewOverlay({
             return (
               <TouchableOpacity
                 key={mode.key}
-                style={[styles.modeTab, isActive && styles.modeTabActive]}
+                style={[styles.modeTab, isActive && styles.modeTabActive, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 6 }]}
                 onPress={() => onModeChange(mode.key)}
                 activeOpacity={0.75}
               >
-                <Ionicons name={mode.iconName} size={26} color={isActive ? theme.primary : theme.text} style={styles.modeIcon} />
-                <Text style={[styles.modeName, isActive && styles.modeNameActive]}>{mode.label}</Text>
-                {loading && isActive
-                  ? <ActivityIndicator size="small" color="#2e7d32" style={{ marginTop: 2 }} />
-                  : <Text style={[styles.modeTime, isActive && styles.modeTimeActive]}>{displayTime}</Text>
-                }
+                <Ionicons name={mode.iconName} size={15} color={isActive ? theme.primary : theme.text} />
+                <View style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Text style={[styles.modeName, isActive && styles.modeNameActive, { fontSize: 9, lineHeight: 11 }]}>{mode.label}</Text>
+                  {loading && isActive ? (
+                    <ActivityIndicator size="small" color="#2e7d32" />
+                  ) : (
+                    <Text style={[styles.modeTime, isActive && styles.modeTimeActive, { fontSize: 11, lineHeight: 13, marginTop: 0 }]}>{displayTime}</Text>
+                  )}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -320,7 +323,7 @@ export default function RoutePreviewOverlay({
       <View style={styles.mapSpacer} pointerEvents="box-none" />
 
       {/* ── BOTTOM SECTION: stats + button ── */}
-      <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 12 }]} pointerEvents="auto">
+      <View style={[styles.bottomSection, { backgroundColor: theme.card, borderTopColor: theme.border, borderTopWidth: 1, paddingBottom: insets.bottom + 6 }]} pointerEvents="auto">
 
         {/* Transit steps */}
         {isTransit && (
@@ -401,38 +404,6 @@ export default function RoutePreviewOverlay({
             )}
           </View>
         )}
-        {/* ── JOURNEY INFO SECTION ── */}
-        <View style={styles.sectionHeader}>
-          <View style={styles.sectionLine} />
-          <Text style={styles.sectionLabel}>Your Journey</Text>
-          <View style={styles.sectionLine} />
-        </View>
-
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.stat}>
-            <Text style={styles.statVal}>{formatDistance(totalDistanceM || distance)}</Text>
-            <Text style={styles.statLbl}>Distance</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.stat}>
-            <Text style={styles.statVal}>
-              {hasParking && totalMinutes != null
-                ? `${totalMinutes} min`
-                : (durationText && !loading ? durationText : `${driveMinutes ?? '?'} min`)}
-            </Text>
-            <Text style={styles.statLbl}>{hasParking ? 'Drive + Walk' : activeModeConfig?.label}</Text>
-          </View>
-          {!isTransit && (
-            <>
-              <View style={styles.statDivider} />
-              <View style={styles.stat}>
-                <Text style={styles.statVal}>{arrivalTime}</Text>
-                <Text style={styles.statLbl}>Arrival</Text>
-              </View>
-            </>
-          )}
-        </View>
         {hasParking && (
           <Text style={styles.parkingJourneySub}>
             <Ionicons name="car-outline" size={16} color={theme.text} /> {driveMinutes ?? '?'} min to car park + <Ionicons name="walk-outline" size={16} color={theme.text} /> {walkMinsExtra} min walk to mosque
@@ -440,36 +411,62 @@ export default function RoutePreviewOverlay({
         )}
 
         {arrivalStatus && (
-          <Text style={[styles.warningText, arrivalStatus.status === 'SAFE' ? styles.warningSafe : styles.warningLate]}>
-            {arrivalStatus.message}
-          </Text>
+          <>
+            <Text style={[styles.warningText, arrivalStatus.status === 'SAFE' ? styles.warningSafe : styles.warningLate, { marginBottom: 6 }]}>
+              {arrivalStatus.message}
+            </Text>
+            <View style={{ height: 1, backgroundColor: theme.border, marginBottom: 8, marginHorizontal: 12 }} />
+          </>
         )}
 
+        <View style={styles.actionRow}>
+          {/* Stats */}
+          <View style={[styles.compactStatsRow, { marginBottom: 0, justifyContent: 'flex-start', flexWrap: 'wrap', gap: 8 }]}>
+            <View style={styles.compactStat}>
+              <Ionicons name="resize-outline" size={14} color={theme.subText} />
+              <Text style={[styles.compactStatVal, { color: theme.text }]}>{formatDistance(totalDistanceM || distance)}</Text>
+            </View>
+            <View style={styles.compactStat}>
+              <Ionicons name={selectedMode === 'transit' ? 'subway-outline' : selectedMode === 'walking' ? 'walk-outline' : 'car-outline'} size={14} color={theme.subText} />
+              <Text style={[styles.compactStatVal, { color: theme.text }]}>
+                {hasParking && totalMinutes != null
+                  ? `${totalMinutes} min`
+                  : (durationText && !loading ? durationText : `${driveMinutes ?? '?'} min`)}
+              </Text>
+            </View>
+            {!isTransit && (
+              <View style={styles.compactStat}>
+                <Ionicons name="time-outline" size={14} color={theme.subText} />
+                <Text style={[styles.compactStatVal, { color: theme.text }]}>{arrivalTime}</Text>
+              </View>
+            )}
+          </View>
 
-        {/* Start button */}
-        <TouchableOpacity
-          style={[styles.startBtn, isTransit && styles.startBtnTransit]}
-          onPress={handleStart}
-          activeOpacity={0.85}
-          disabled={loading}
-        >
-          <Ionicons name={isTransit ? 'map-outline' : hasParking ? 'car-outline' : 'navigate'} size={20} color="#fff" style={styles.startIcon} />
-          <Text style={styles.startText}>
-            {isTransit ? 'Open in Google Maps' : hasParking ? 'Drive to Car Park' : 'Start Navigation'}
-          </Text>
-        </TouchableOpacity>
+          {/* Start button */}
+          <TouchableOpacity
+            style={[styles.startBtn, isTransit && styles.startBtnTransit, { flex: 1.2, paddingVertical: 10, borderRadius: 10 }]}
+            onPress={handleStart}
+            activeOpacity={0.85}
+            disabled={loading}
+          >
+            <Ionicons name={isTransit ? 'map-outline' : hasParking ? 'car-outline' : 'navigate'} size={18} color="#fff" style={styles.startIcon} />
+            <Text style={[styles.startText, { fontSize: 14 }]}>
+              {isTransit ? 'Open Maps' : hasParking ? 'To Car Park' : 'Start'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* ── Start Location Search Modal ── */}
-      <Modal visible={showStartSearch} animationType="slide" transparent={false}>
-        <KeyboardAvoidingView style={styles.searchModal} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.searchHeader}>
-            <View style={styles.searchInputWrap}>
-              <Ionicons name="search" size={20} color="#888" style={{marginRight: 8}} />
+      {/* ── SEARCH MODAL for Start Location ── */}
+      <Modal visible={showStartSearch} animationType="slide" onRequestClose={() => setShowStartSearch(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.searchModal, { backgroundColor: theme.background }]}>
+          <View style={[styles.searchHeader, { backgroundColor: theme.card, borderBottomColor: theme.border }]}>
+            <View style={[styles.searchInputWrap, { backgroundColor: theme.chipBg }]}>
+              <Ionicons name="search" size={18} color={theme.subText} style={styles.searchInputIcon} />
               <TextInput
-                style={styles.searchInput}
-                placeholder="Search for a start location…"
-                placeholderTextColor="#aaa"
+                style={[styles.searchInput, { color: theme.text }]}
+                placeholder="Search starting point…"
+                placeholderTextColor={theme.subText}
                 value={searchQuery}
                 onChangeText={handleSearchChange}
                 autoFocus
@@ -477,8 +474,8 @@ export default function RoutePreviewOverlay({
                 clearButtonMode="while-editing"
               />
             </View>
-            <TouchableOpacity onPress={closeSearch} style={styles.cancelBtn}>
-              <Text style={styles.cancelText}>Cancel</Text>
+            <TouchableOpacity onPress={() => setShowStartSearch(false)} style={styles.cancelBtn}>
+              <Text style={[styles.cancelText, { color: theme.primary }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
 
@@ -543,7 +540,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
@@ -556,30 +553,30 @@ const styles = StyleSheet.create({
   originRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   dotBlue: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#4A90E2', flexShrink: 0 },
   dotGreen: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#2e7d32', flexShrink: 0 },
-  originLabel: { flex: 1, fontSize: 14, color: '#222', fontWeight: '500' },
+  originLabel: { flex: 1, fontSize: 14, color: '#222', fontFamily: 'Syne-Regular' },
   editChip: { backgroundColor: '#e3f2fd', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
-  editChipText: { fontSize: 12, fontWeight: '700', color: '#1565C0' },
+  editChipText: { fontSize: 12, fontFamily: 'Unbounded-Bold', color: '#1565C0' },
   routeConnector: { width: 2, height: 10, backgroundColor: '#ddd', marginLeft: 4, marginVertical: 1 },
   viaIcon: { fontSize: 13, width: 18, textAlign: 'center', flexShrink: 0 },
   viaTag: {
-    fontSize: 10, fontWeight: '800', color: '#1565C0',
+    fontSize: 10, fontFamily: 'Unbounded-Bold', color: '#1565C0',
     backgroundColor: '#e3f2fd', borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2,
   },
   parkingJourneySub: {
     fontSize: 11, color: '#555', textAlign: 'center',
     marginTop: -4, marginBottom: 6,
   },
-  divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 8 },
-  modeRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 4 },
+  modeRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 12, paddingVertical: 4, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
   modeTab: {
-    flex: 1, alignItems: 'center', paddingVertical: 5,
+    flex: 1, alignItems: 'center', paddingVertical: 3,
     borderRadius: 10, borderWidth: 2, borderColor: 'transparent', backgroundColor: '#f5f5f5',
   },
   modeTabActive: { borderColor: '#2e7d32', backgroundColor: '#f0faf0' },
   modeIcon: { fontSize: 14, marginBottom: 1 },
-  modeName: { fontSize: 10, fontWeight: '600', color: '#666' },
+  modeName: { fontSize: 10, fontFamily: 'Syne-Bold', color: '#666' },
   modeNameActive: { color: '#2e7d32' },
-  modeTime: { fontSize: 11, fontWeight: '800', color: '#222', marginTop: 1 },
+  modeTime: { fontSize: 11, fontFamily: 'Unbounded-Bold', color: '#222', marginTop: 1 },
   modeTimeActive: { color: '#1b5e20' },
 
   // ── Transparent middle ──
@@ -587,8 +584,7 @@ const styles = StyleSheet.create({
 
   // ── Bottom section ──
   bottomSection: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     paddingTop: 14,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -598,20 +594,32 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#f9f9f9', borderRadius: 12,
-    paddingVertical: 10, marginBottom: 10,
+  compactStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
   },
-  stat: { flex: 1, alignItems: 'center' },
-  statVal: { fontSize: 14, fontWeight: '800', color: '#111' },
-  statLbl: { fontSize: 12, color: '#757575', marginTop: 3, fontWeight: '500' },
-  statDivider: { width: 1, height: 28, backgroundColor: '#e0e0e0' },
+  compactStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  compactStatVal: {
+    fontSize: 12,
+    fontFamily: 'Syne-Bold',
+    fontVariant: ['tabular-nums'],
+  },
   warningText: {
-    fontSize: 13, fontWeight: '700', textAlign: 'center', marginBottom: 8,
+    fontSize: 13, fontFamily: 'Syne-Bold', textAlign: 'center', marginBottom: 8,
   },
-  warningSafe: { color: '#2e7d32' },
-  warningLate: { color: '#d32f2f' },
+  warningSafe: { color: '#059669' },
+  warningLate: { color: '#ef4444' },
   transitScroll: { maxHeight: 110, marginBottom: 8 },
   transitLoadingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   transitLoadingText: { fontSize: 14, color: '#666' },
@@ -620,7 +628,7 @@ const styles = StyleSheet.create({
   stepIcon: { fontSize: 16 },
   stepConnector: { flex: 1, width: 2, backgroundColor: '#e0e0e0', minHeight: 8, marginTop: 2 },
   stepInfo: { flex: 1, paddingTop: 1 },
-  stepPrimary: { fontSize: 13, fontWeight: '600', color: '#111' },
+  stepPrimary: { fontSize: 13, fontFamily: 'Syne-Bold' },
   stepSub: { fontSize: 12, color: '#888', marginTop: 1 },
   transitNote: {
     fontSize: 11, color: '#b08011', backgroundColor: '#fff8e1',
@@ -628,72 +636,73 @@ const styles = StyleSheet.create({
   },
   noRouteText: { fontSize: 14, color: '#888', paddingVertical: 10, textAlign: 'center' },
   parkingCard_section: {
-    backgroundColor: '#eaedf2',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#d0d5dd',
     padding: 10,
     marginBottom: 10,
   },
-  sectionHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 8,
+  sectionLabel: { fontSize: 10, fontFamily: 'Syne-Bold', letterSpacing: 0.8, textTransform: 'uppercase' },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 20,
+    marginTop: 4,
   },
-  sectionLine: { flex: 1, height: 1, backgroundColor: '#e0e0e0' },
-  sectionLabel: { fontSize: 10, fontWeight: '700', color: '#aaa', letterSpacing: 0.8, textTransform: 'uppercase' },
   parkingHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 6,
   },
-  parkingTitle: { fontSize: 13, fontWeight: '700', color: '#555' },
-  parkingChevron: { fontSize: 12, color: '#999', fontWeight: '700' },
+  parkingTitle: { fontSize: 13, fontFamily: 'Syne-Bold' },
+  parkingChevron: { fontSize: 12, color: '#999', fontFamily: 'Syne-Bold' },
   noDataText: { fontSize: 13, color: '#bbb', fontStyle: 'italic' },
   parkingCard: {
-    backgroundColor: '#fff', borderRadius: 10,
+    borderRadius: 10,
     padding: 10, paddingRight: 36,
-    marginRight: 8, width: 150, borderWidth: 2, borderColor: 'transparent',
+    marginRight: 8, width: 150, borderWidth: 1,
   },
-  parkingCardSelected: { borderColor: '#2e7d32', backgroundColor: '#f0faf0' },
-  parkingCardName: { fontSize: 12, fontWeight: '600', color: '#111', marginBottom: 2 },
-  parkingCardWalk: { fontSize: 11, color: '#2e7d32', fontWeight: '600' },
-  parkingCardRow: {}, // unused — kept for safety
+  parkingCardSelected: { borderColor: '#059669' },
+  parkingCardName: { fontSize: 12, fontFamily: 'Syne-Bold', marginBottom: 2 },
+  parkingCardWalk: { fontSize: 11, color: '#059669', fontFamily: 'Syne-Bold' },
+  parkingCardRow: {},
   parkingCardIcon: {
     position: 'absolute', top: 8, right: 8,
     fontSize: 12, fontWeight: '900', color: '#aaa',
-    width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#ddd',
+    width: 20, height: 20, borderRadius: 10, borderWidth: 1, borderColor: '#ddd',
     textAlign: 'center', lineHeight: 17,
   },
-  parkingCardIconSelected: { color: '#2e7d32', borderColor: '#2e7d32' },
+  parkingCardIconSelected: { color: '#059669', borderColor: '#059669' },
   startBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#2e7d32', borderRadius: 14, paddingVertical: 14, gap: 10,
-    shadowColor: '#2e7d32', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 5,
+    backgroundColor: '#059669', borderRadius: 14, paddingVertical: 14, gap: 10,
+    shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 5,
   },
-  startBtnTransit: { backgroundColor: '#1565C0', shadowColor: '#1565C0' },
+  startBtnTransit: { backgroundColor: '#2563EB', shadowColor: '#2563EB' },
   startIcon: { fontSize: 16, color: '#fff' },
-  startText: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: 0.2 },
+  startText: { fontSize: 15, fontFamily: 'Syne-Bold', color: '#fff', letterSpacing: 0.2 },
 
   // ── Search modal ──
-  searchModal: { flex: 1, backgroundColor: '#fff' },
+  searchModal: { flex: 1 },
   searchHeader: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 16, paddingTop: 56, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+    borderBottomWidth: 1,
   },
   searchInputWrap: {
     flex: 1, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#f5f5f5', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 8,
+    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 8,
   },
   searchInputIcon: { fontSize: 16 },
-  searchInput: { flex: 1, fontSize: 16, color: '#111' },
+  searchInput: { flex: 1, fontSize: 16 },
   cancelBtn: { paddingHorizontal: 4, paddingVertical: 8 },
-  cancelText: { fontSize: 16, color: '#1565C0', fontWeight: '600' },
+  cancelText: { fontSize: 15, fontFamily: 'Syne-Bold' },
   useCurrentRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 16 },
   useCurrentIcon: { fontSize: 20 },
-  useCurrentLabel: { fontSize: 15, fontWeight: '600', color: '#2e7d32' },
+  useCurrentLabel: { fontSize: 14, fontFamily: 'Syne-Bold' },
   suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14 },
   suggestionIcon: { fontSize: 18, width: 24 },
   suggestionInfo: { flex: 1 },
-  suggestionMain: { fontSize: 15, fontWeight: '600', color: '#111' },
-  suggestionSub: { fontSize: 12, color: '#888', marginTop: 2 },
-  suggestionDivider: { height: 1, backgroundColor: '#f5f5f5', marginLeft: 56 },
+  suggestionMain: { fontSize: 14, fontFamily: 'Syne-Bold' },
+  suggestionSub: { fontSize: 12, marginTop: 2 },
+  suggestionDivider: { height: 1, marginLeft: 56 },
 });
