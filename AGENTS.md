@@ -1,4 +1,4 @@
-<!-- BEGIN:mobile-app-performance-rules -->
+﻿<!-- BEGIN:mobile-app-performance-rules -->
 # ?? CRITICAL MOBILE APP ARCHITECTURE & PERFORMANCE RULES
 
 All contributors and AI agents working on the Muslim Atlas mobile app must adhere to these architecture and performance constraints:
@@ -52,4 +52,14 @@ Agents must **never take autonomous action on external platforms (Jira, GitHub, 
 - Changed-line test coverage must be >= 80%.
 - Bug fixes must include a regression test reproducing the issue.
 - Run tests locally with `npm test` before committing.
+
+## 4. CodeRabbit Automated Review & Dual Approval Gate
+To ensure velocity and code quality, all pull requests must pass the **Dual Approval Gate**:
+1. **Gate 1 (Automated AI Review - CodeRabbit):**
+   - CodeRabbit analyzes PR diffs against ticket acceptance criteria ([MA-XX]).
+   - **Mandatory Approval:** CodeRabbit must approve the PR before it is submitted for human code review. Code review will not proceed until CodeRabbit approval is green.
+   - **Diff Isolation:** CodeRabbit is strictly instructed to evaluate only changed files and lines. Pre-existing issues outside the PR diff are non-blocking and will not delay approval.
+2. **Gate 2 (Human Lead Review - Yusuf Qureshi):**
+   - Once Gate 1 passes, the PR is placed into code review for Yusuf Qureshi.
+   - Final review and merge authorization rests exclusively with the human lead.
 <!-- END:engineering-workflow -->
