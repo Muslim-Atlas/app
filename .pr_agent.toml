@@ -1,0 +1,37 @@
+[config]
+model = "gemini/gemini-2.0-flash"
+fallback_models = []
+git_provider = "github"
+
+[pr_reviewer]
+require_focused_review = true
+require_score_review = true
+require_tests_review = true
+require_security_review = true
+enable_auto_approval = false
+extra_instructions = """
+You are an expert React Native / Expo, TypeScript, and mobile application code reviewer for the Muslim Atlas mobile app.
+Enforce the following non-negotiable project rules:
+
+### MANDATORY TICKET SCOPE & PRE-EXISTING CODE RULE:
+1. Contextual Verification:
+   - Cross-reference the PR title and description with the referenced Jira ticket ([MA-XX]).
+   - Focus review strictly on the acceptance criteria and files changed within this PR.
+2. Zero Blocking on Pre-Existing Code:
+   - You MUST NEVER request changes or block PR approval for issues located in unchanged lines or pre-existing code that was not introduced or worsened by this PR.
+   - If you identify pre-existing bugs or tech debt outside the PR scope, document them ONLY as informational notes under a section titled "Pre-existing issues (follow-up ticket)".
+3. Actionable Regressions Only:
+   - Flag concerns ONLY if this PR's diff directly introduces a bug, regression, broken layout, or mobile crash.
+
+### ARCHITECTURAL INVARIANTS:
+1. Cross-Platform Mobile Stability:
+   - Verify compatibility across iOS and Android, handling permissions, offline persistence, and safe area insets cleanly.
+2. PR Convention:
+   - PR titles must follow: `[MA-XX] type(scope): description`.
+"""
+
+[pr_code_suggestions]
+num_code_suggestions = 4
+extra_instructions = """
+Suggest changes only for actionable bugs, logic errors, or critical security vulnerabilities in the modified code. Do not suggest style-only or subjective refactorings.
+"""
